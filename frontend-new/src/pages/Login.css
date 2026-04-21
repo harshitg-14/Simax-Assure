@@ -1,0 +1,15 @@
+/* src/pages/Login.css */
+.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 36px; width: 100%; max-width: 420px; position: relative; z-index: 1; }
+.login-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 16px 16px 0 0; }
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.login-hex { width: 42px; height: 42px; background: var(--accent-dim); border: 1px solid rgba(212,160,23,0.4); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--accent); }
+.login-name { font-family: var(--display); font-size: 22px; font-weight: 800; color: var(--text); }
+.login-name span { color: var(--accent); }
+.login-tag { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 2px; }
+.login-title { font-family: var(--display); font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+.login-sub { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
+.login-error { background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; color: var(--danger); margin-bottom: 16px; }
+.login-btn { width: 100%; padding: 12px; font-size: 14px; }
+.login-hint { margin-top: 20px; background: var(--surface2); border-radius: 8px; padding: 14px; font-size: 12px; color: var(--text2); line-height: 2; }
+.login-hint code { font-family: var(--mono); background: var(--bg); padding: 2px 6px; border-radius: 4px; color: var(--accent); font-size: 11px; }
