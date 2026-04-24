@@ -1,13 +1,34 @@
+# ========================
 # Python
-venv/
+# ========================
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# Database
 *.db
+
+# Environment variables
 .env
 
-# Node
+# ========================
+# Node / Frontend
+# ========================
 node_modules/
 build/
+dist/
 
-# VS Code
+# ========================
+# VS Code / Editor
+# ========================
 .vscode/
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+Thumbs.db

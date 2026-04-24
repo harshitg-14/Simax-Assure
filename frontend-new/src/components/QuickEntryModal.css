@@ -12,3 +12,44 @@
 .tab-bar { display: flex; gap: 3px; background: var(--surface2); padding: 4px; border-radius: 10px; margin-bottom: 20px; }
 .tab-btn { flex: 1; text-align: center; padding: 8px 12px; border-radius: 7px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text3); transition: all 0.18s; border: none; background: transparent; }
 .tab-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 8px rgba(0,0,0,0.4); }
+
+//
+
+/* 🔥 FIX INPUT STYLING */
+.modal-form input,
+.modal-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+
+.modal-form input::placeholder {
+  color: var(--text3);
+}
+
+/* 🔥 FIX BUTTON */
+.modal-form button {
+  margin-top: 16px;
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #f5b400;
+  color: black;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.modal-form button:hover {
+  opacity: 0.9;
+}
+.modal-form input,
+.modal-form select {
+  appearance: none;
+}

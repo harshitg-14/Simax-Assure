@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db import Base, engine
 from app.routes import departments, budgets, commitments, expenses, dashboard, alerts
 from app import models
+from app.routes import ai
+app.include_router(ai.router)
+from app.routes import dashboard
+
+app.include_router(dashboard.router)
 
 Base.metadata.create_all(bind=engine)
 
