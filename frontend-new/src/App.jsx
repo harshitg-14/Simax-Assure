@@ -279,13 +279,18 @@ function AppLayout() {
   const { isAuthenticated } = useAuth();
 
   const [alertCount, setAlertCount] = useState(0);
+  const [openAlerts, setOpenAlerts] = useState([]);
   const [depts, setDepts] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [toast, setToast] = useState('');
 
   const refreshAlerts = useCallback(() => {
     alertsApi.listOpen()
-      .then(r => setAlertCount((r.data || []).length))
+      .then(r => {
+        const data = r.data || [];
+        setAlertCount(data.length);
+        setOpenAlerts(data.slice(0, 8));
+      })
       .catch(() => {});
   }, []);
 
@@ -326,7 +331,7 @@ function AppLayout() {
             zIndex: 1,
           }}
         >
-          <Topbar onNewEntry={() => setShowModal(true)} />
+          <Topbar onNewEntry={() => setShowModal(true)} alertCount={alertCount} openAlerts={openAlerts} />
 
           <div style={{ flex: 1 }}>
             <Routes>

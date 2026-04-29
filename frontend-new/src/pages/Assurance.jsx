@@ -1,54 +1,66 @@
-// src/pages/Assurance.jsx
-import React, { useEffect, useState } from 'react';
-import { alertsApi, budgetsApi, departmentsApi } from '../api/services';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { useEffect, useState } from 'react';
+import { alertsApi, departmentsApi } from '../api/services';
+import { PieChart, Pie, Tooltip, ResponsiveContainer } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 
-const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const SEV_BORDER = { critical: 'var(--danger)', high: 'var(--warn)', medium: 'var(--accent2)', low: 'var(--success)' };
 
-const SEV_COLOR = { critical: 'var(--danger)', high: 'var(--danger)', medium: 'var(--warn)', low: 'var(--success)' };
-const SEV_ICON  = { critical: '', high: '', medium: '', low: '' };
-const SEV_BORDER = { critical: 'var(--danger)', high: 'var(--danger)', medium: 'var(--warn)', low: 'var(--success)' };
+const STATUS_COLOR = {
+  open:         { bg: 'rgba(220,38,38,0.08)',   color: 'var(--danger)' },
+  acknowledged: { bg: 'rgba(217,119,6,0.08)',   color: 'var(--warn)' },
+  resolved:     { bg: 'rgba(5,150,105,0.08)',   color: 'var(--success)' },
+  dismissed:    { bg: 'rgba(61,80,112,0.15)',   color: 'var(--text3)' },
+};
+
+const RULES = [
+  { code: 'NO_COMMITMENT',           label: 'Expense without approved commitment' },
+  { code: 'HIGH_VALUE_EXPENSE',      label: 'High-value expense threshold exceeded' },
+  { code: 'EXPENSE_EXCEEDS_COMMITMENT', label: 'Expense amount exceeds linked commitment' },
+  { code: 'BUDGET_UTILIZATION_80',   label: 'Budget utilization above 80%' },
+  { code: 'BUDGET_EXCEEDED',         label: 'Allocated budget fully exceeded' },
+  { code: 'MULTIPLE_HIGH_EXPENSES',  label: 'Repeated high-value spending pattern' },
+];
 
 export default function Assurance() {
   const { user } = useAuth();
-  const [alerts, setAlerts]     = useState([]);
-  const [budgets, setBudgets]   = useState([]);
-  const [depts, setDepts]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [filter, setFilter]     = useState('all');
+  const [alerts, setAlerts]   = useState([]);
+  const [depts, setDepts]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter]   = useState('all');
 
   const load = () => {
-    Promise.all([alertsApi.list(), budgetsApi.list(), departmentsApi.list()])
-      .then(([a, b, d]) => {
-        setAlerts(a.data || []);
-        setBudgets(b.data || []);
-        setDepts(d.data || []);
-      }).finally(() => setLoading(false));
+    Promise.all([alertsApi.list(), departmentsApi.list()])
+      .then(([a, d]) => { setAlerts(a.data || []); setDepts(d.data || []); })
+      .finally(() => setLoading(false));
   };
   useEffect(load, []);
 
-  const updateAlert = async (id, action) => {
+  const act = async (id, action) => {
     if (action === 'acknowledge') await alertsApi.acknowledge(id, user?.username || 'admin');
     if (action === 'resolve')     await alertsApi.resolve(id, user?.username || 'admin');
     if (action === 'dismiss')     await alertsApi.dismiss(id);
     load();
   };
 
-  const filtered = filter === 'all' ? alerts : alerts.filter(a => a.status === filter || a.severity === filter);
-  const open     = alerts.filter(a => a.status === 'open');
-  const acked    = alerts.filter(a => a.status === 'acknowledged');
-  const resolved = alerts.filter(a => a.status === 'resolved');
+  const filtered = filter === 'all' ? alerts : alerts.filter(a => a.status === filter || (a.severity||'').toLowerCase() === filter);
+  const open     = alerts.filter(a => a.status === 'open').length;
+  const acked    = alerts.filter(a => a.status === 'acknowledged').length;
+  const resolved = alerts.filter(a => a.status === 'resolved').length;
 
-  const pieData = [
-    { name: 'Critical', value: alerts.filter(a => a.severity === 'critical').length, color: '#f43f5e' },
-    { name: 'High',     value: alerts.filter(a => a.severity === 'high').length,     color: '#f59e0b' },
-    { name: 'Medium',   value: alerts.filter(a => a.severity === 'medium').length,   color: '#d4a017' },
-    { name: 'Low',      value: alerts.filter(a => a.severity === 'low').length,      color: '#22d3a0' },
-  ].filter(d => d.value > 0);
+  const PIE_COLORS = { critical: '#dc2626', high: '#d97706', medium: '#c9970a', low: '#059669' };
+  const pieData = Object.entries(PIE_COLORS)
+    .map(([key, fill]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), value: alerts.filter(a => (a.severity||'').toLowerCase() === key).length, fill }))
+    .filter(d => d.value > 0);
 
-  const getDeptName = (id) => depts.find(d => d.department_id === id)?.department_name || '—';
+  const getDeptName = id => depts.find(d => d.department_id === id)?.department_name || '—';
+
+  const filterCount = (f) => {
+    if (f === 'all') return alerts.length;
+    return alerts.filter(a => a.status === f || (a.severity || '').toLowerCase() === f).length;
+  };
+
+  const FILTERS = ['all', 'open', 'acknowledged', 'resolved', 'critical', 'high', 'medium'];
 
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
 
@@ -56,84 +68,106 @@ export default function Assurance() {
     <div className="page fade-in">
       <div className="ph">
         <div>
-          <div className="ph-title">Assurance Monitor</div>
-          <div className="ph-sub">Financial compliance alerts — auto-generated by rules engine</div>
+          <div className="ph-title">Risk &amp; Compliance</div>
+          <div className="ph-sub">Financial control alerts generated by the rules engine</div>
         </div>
       </div>
 
-      {open.length > 0 && (
+      {open > 0 && (
         <div className="alert-strip">
           <div className="pulse-dot" />
-          <div><strong>{open.length} Open Alerts</strong> — Immediate review required</div>
+          <strong>{open} open alert{open !== 1 ? 's' : ''}</strong>
+          <span style={{ color: 'var(--text2)', marginLeft: 4 }}>require immediate review.</span>
         </div>
       )}
 
-      {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi-card"><div className="kpi-icon"></div><div className="kpi-label">Open</div><div className="kpi-value" style={{ color: 'var(--danger)' }}>{open.length}</div></div>
-        <div className="kpi-card"><div className="kpi-icon"></div><div className="kpi-label">Acknowledged</div><div className="kpi-value" style={{ color: 'var(--warn)' }}>{acked.length}</div></div>
-        <div className="kpi-card"><div className="kpi-icon"></div><div className="kpi-label">Resolved</div><div className="kpi-value" style={{ color: 'var(--success)' }}>{resolved.length}</div></div>
-        <div className="kpi-card"><div className="kpi-icon"></div><div className="kpi-label">Total</div><div className="kpi-value">{alerts.length}</div></div>
+        <KStat label="Open"         val={open}     color="var(--danger)" />
+        <KStat label="Acknowledged" val={acked}    color="var(--warn)" />
+        <KStat label="Resolved"     val={resolved} color="var(--success)" />
+        <KStat label="Total"        val={alerts.length} color="var(--text)" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 18 }}>
         <div>
-          {/* Filter tabs */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            {['all','open','acknowledged','resolved','critical','high','medium'].map(f => (
-              <button key={f} onClick={() => setFilter(f)}
+          {/* Filter bar */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            {FILTERS.map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
                 className={filter === f ? 'btn btn-primary' : 'btn btn-ghost'}
-                style={{ padding: '6px 12px', fontSize: 11 }}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                style={{ padding: '5px 12px', fontSize: 11, textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 5 }}
+              >
+                {f}
+                <span style={{
+                  fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 600,
+                  opacity: filter === f ? 0.8 : 0.5,
+                }}>
+                  {filterCount(f)}
+                </span>
               </button>
             ))}
           </div>
 
-          {/* Alerts List */}
           <div className="card">
             <div className="card-head">
-              <div className="card-title">Alerts ({filtered.length})</div>
-              <span className="chip chip-danger">{open.length} Open</span>
+              <div className="card-title">Alerts <span style={{ color: 'var(--text3)', fontWeight: 400 }}>({filtered.length})</span></div>
+              <span className="chip chip-danger">{open} Open</span>
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{ padding: 12 }}>
               {filtered.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '20px 0' }}> No alerts matching filter</div>
+                <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '24px 0', fontSize: 13 }}>
+                  No alerts match the selected filter.
+                </div>
               ) : (
                 <div className="alerts-list">
-                  {filtered.map(a => (
-                    <div key={a.alert_id} className="alert-item" style={{ '--alc': SEV_BORDER[a.severity] || 'var(--warn)' }}>
-                      <div className="alert-ico">{SEV_ICON[a.severity] || ''}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700 }}>{a.title}</span>
-                          <span className="pill" style={{ background: 'rgba(212,160,23,0.1)', color: 'var(--accent)', fontSize: 9 }}>{a.alert_code}</span>
-                          <span className="pill" style={{ background: a.status === 'open' ? 'rgba(244,63,94,0.1)' : a.status === 'acknowledged' ? 'rgba(245,158,11,0.1)' : 'rgba(34,211,160,0.1)', color: a.status === 'open' ? 'var(--danger)' : a.status === 'acknowledged' ? 'var(--warn)' : 'var(--success)', fontSize: 9 }}>{a.status}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 4 }}>{a.message}</div>
-                        {a.recommended_action && (
-                          <div style={{ fontSize: 11, color: 'var(--accent)', fontStyle: 'italic' }}> {a.recommended_action}</div>
-                        )}
-                        <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4 }}>
-                          {a.category} · {a.entity_type} #{a.entity_id} · {getDeptName(a.department_id)} · Due: {a.due_date || '—'}
-                        </div>
-                        {a.acknowledged_by && (
+                  {filtered.map(a => {
+                    const sev = (a.severity || '').toLowerCase();
+                    const sc  = STATUS_COLOR[a.status] || STATUS_COLOR.open;
+                    return (
+                      <div
+                        key={a.alert_id}
+                        className="alert-item"
+                        style={{ '--alc': SEV_BORDER[sev] || 'var(--warn)', padding: '12px 14px', gap: 12, display: 'flex', alignItems: 'flex-start' }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{a.title}</span>
+                            <span className="pill" style={{ background: 'rgba(255,220,60,0.1)', color: '#f5d96b', letterSpacing: '0.3px' }}>{a.alert_code.replace(/_/g, ' ')}</span>
+                            <span className="pill" style={{ background: sc.bg, color: sc.color }}>
+                              {a.status}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5, marginBottom: 5 }}>{a.message}</div>
+                          {a.recommended_action && (
+                            <div style={{ fontSize: 11, color: 'var(--text3)', fontStyle: 'italic', marginBottom: 4 }}>
+                              Recommended: {a.recommended_action}
+                            </div>
+                          )}
                           <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>
-                            Actioned by: {a.acknowledged_by}
+                            {a.category} &middot; {a.entity_type} #{a.entity_id} &middot; {getDeptName(a.department_id)}
+                            {a.due_date && <> &middot; Due {a.due_date}</>}
+                          </div>
+                          {a.acknowledged_by && (
+                            <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
+                              Actioned by: {a.acknowledged_by}
+                            </div>
+                          )}
+                        </div>
+                        {a.status === 'open' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
+                            <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => act(a.alert_id, 'acknowledge')}>Acknowledge</button>
+                            <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => act(a.alert_id, 'resolve')}>Resolve</button>
+                            <button className="btn btn-ghost"   style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => act(a.alert_id, 'dismiss')}>Dismiss</button>
                           </div>
                         )}
+                        {a.status === 'acknowledged' && (
+                          <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: 11, flexShrink: 0 }} onClick={() => act(a.alert_id, 'resolve')}>Resolve</button>
+                        )}
                       </div>
-                      {a.status === 'open' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                          <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => updateAlert(a.alert_id, 'acknowledge')}>Acknowledge</button>
-                          <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => updateAlert(a.alert_id, 'resolve')}>Resolve</button>
-                          <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => updateAlert(a.alert_id, 'dismiss')}>Dismiss</button>
-                        </div>
-                      )}
-                      {a.status === 'acknowledged' && (
-                        <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: 11, flexShrink: 0 }} onClick={() => updateAlert(a.alert_id, 'resolve')}>Resolve</button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -141,24 +175,22 @@ export default function Assurance() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Severity Pie */}
+          {/* Pie */}
           <div className="card">
-            <div className="card-head"><div className="card-title">Alert Severity</div></div>
+            <div className="card-head"><div className="card-title">Alert Severity Breakdown</div></div>
             <div className="card-body">
               {pieData.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={180}>
+                  <ResponsiveContainer width="100%" height={160}>
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>
-                        {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} />
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={44} outerRadius={72} dataKey="value" paddingAngle={3} />
+                      <Tooltip contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
                     {pieData.map((d, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: d.fill, flexShrink: 0 }} />
                         <span style={{ flex: 1, color: 'var(--text2)' }}>{d.name}</span>
                         <span style={{ fontFamily: 'var(--mono)', fontWeight: 600 }}>{d.value}</span>
                       </div>
@@ -166,31 +198,28 @@ export default function Assurance() {
                   </div>
                 </>
               ) : (
-                <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '40px 0' }}> No alerts</div>
+                <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '32px 0', fontSize: 13 }}>No alerts</div>
               )}
             </div>
           </div>
 
-          {/* Rules Engine Display */}
+          {/* Rules engine */}
           <div className="card">
-            <div className="card-head"><div className="card-title">Assurance Rules Engine</div><span className="chip chip-accent">Always Active</span></div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { icon: '', code: 'NO_COMMITMENT',          desc: 'Expense without commitment' },
-                { icon: '', code: 'HIGH_VALUE_EXPENSE',     desc: 'High-value expense (≥₹10,000)' },
-                { icon: '', code: 'EXPENSE_EXCEEDS_COMMITMENT', desc: 'Expense exceeds commitment' },
-                { icon: '', code: 'BUDGET_UTILIZATION_80', desc: '80% budget threshold' },
-                { icon: '', code: 'BUDGET_EXCEEDED',        desc: 'Budget 100% exceeded' },
-                { icon: '', code: 'MULTIPLE_HIGH_EXPENSES', desc: 'Repeated high-value pattern' },
-              ].map((rule, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface2)', borderRadius: 8, padding: '10px 14px' }}>
-                  <span style={{ fontSize: 16 }}>{rule.icon}</span>
+            <div className="card-head">
+              <div className="card-title">Rules Engine</div>
+              <span className="chip chip-success">Active</span>
+            </div>
+            <div className="card-body" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {RULES.map((rule, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'var(--surface2)', borderRadius: 6, padding: '9px 12px',
+                  border: '1px solid var(--border)',
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700 }}>{rule.desc}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{rule.code}</div>
-                  </div>
-                  <div style={{ width: 32, height: 18, borderRadius: 9, background: 'var(--success)', position: 'relative' }}>
-                    <div style={{ position: 'absolute', width: 12, height: 12, borderRadius: '50%', background: '#fff', top: 3, left: 17 }} />
+                    <div style={{ fontSize: 12, fontWeight: 500 }}>{rule.label}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 2 }}>{rule.code.replace(/_/g, ' ')}</div>
                   </div>
                 </div>
               ))}
@@ -198,6 +227,15 @@ export default function Assurance() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function KStat({ label, val, color }) {
+  return (
+    <div className="kpi-card">
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value" style={{ color }}>{val}</div>
     </div>
   );
 }

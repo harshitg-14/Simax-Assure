@@ -1,55 +1,67 @@
-/* src/components/QuickEntryModal.css */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.72); z-index: 999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); animation: fadeIn 0.2s ease; }
-.modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 500px; max-width: 94vw; animation: fadeUp 0.2s ease; }
-.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.modal-title { font-family: var(--display); font-size: 18px; font-weight: 800; }
-.modal-close { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text2); padding: 4px 10px; cursor: pointer; font-size: 14px; }
+/* Quick Entry Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+  z-index: 999; display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); animation: fadeIn 0.18s ease;
+}
+.modal-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 26px; width: 480px; max-width: 94vw;
+  animation: fadeUp 0.18s ease;
+}
+.modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 18px;
+}
+.modal-title { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+.modal-close {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text3); padding: 3px 10px;
+  cursor: pointer; font-size: 14px; transition: all 0.15s;
+}
 .modal-close:hover { border-color: var(--danger); color: var(--danger); }
-.modal-error { background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; color: var(--danger); margin-bottom: 14px; }
-.modal-form { margin-bottom: 6px; }
-.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.tab-bar { display: flex; gap: 3px; background: var(--surface2); padding: 4px; border-radius: 10px; margin-bottom: 20px; }
-.tab-btn { flex: 1; text-align: center; padding: 8px 12px; border-radius: 7px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text3); transition: all 0.18s; border: none; background: transparent; }
-.tab-btn.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 8px rgba(0,0,0,0.4); }
+.modal-error {
+  background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.25);
+  border-radius: 6px; padding: 9px 12px; font-size: 12px;
+  color: var(--danger); margin-bottom: 12px;
+}
 
-//
-
-/* 🔥 FIX INPUT STYLING */
-.modal-form input,
-.modal-form select {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
+/* Tab bar */
+.tab-bar {
+  display: flex; gap: 2px; background: var(--surface2);
+  padding: 3px; border-radius: 7px; margin-bottom: 18px;
   border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
 }
+.tab-btn {
+  flex: 1; text-align: center; padding: 7px 10px; border-radius: 5px;
+  cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text3);
+  transition: all 0.15s; border: none; background: transparent; font-family: var(--sans);
+}
+.tab-btn.active { background: var(--surface); color: var(--text); font-weight: 600; }
 
-.modal-form input::placeholder {
-  color: var(--text3);
-}
+/* Form inputs inside modal */
+.modal-form { margin-bottom: 4px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-/* 🔥 FIX BUTTON */
-.modal-form button {
-  margin-top: 16px;
-  width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  background: #f5b400;
-  color: black;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.modal-form button:hover {
-  opacity: 0.9;
-}
 .modal-form input,
 .modal-form select {
+  width: 100%; padding: 9px 11px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--bg2);
+  color: var(--text); font-size: 13px; outline: none;
+  font-family: var(--sans); transition: border-color 0.15s;
   appearance: none;
 }
+.modal-form input:focus,
+.modal-form select:focus { border-color: var(--accent); }
+.modal-form input::placeholder { color: var(--text3); }
+
+.modal-form button {
+  margin-top: 14px; width: 100%; padding: 10px; border-radius: 6px;
+  border: none; background: var(--accent); color: var(--bg);
+  font-weight: 600; font-size: 13px; cursor: pointer;
+  transition: background 0.15s; font-family: var(--sans);
+}
+.modal-form button:hover { background: var(--accent2); }
+.modal-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }

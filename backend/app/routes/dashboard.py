@@ -107,9 +107,10 @@ def alerts_summary(db: Session = Depends(get_db)):
 
     return {
         "total": len(alerts),
-        "critical": len([a for a in alerts if a.severity == "Critical"]),
-        "high": len([a for a in alerts if a.severity == "High"]),
-        "medium": len([a for a in alerts if a.severity == "Medium"])
+        "critical": len([a for a in alerts if a.severity == "critical"]),
+        "high": len([a for a in alerts if a.severity == "high"]),
+        "medium": len([a for a in alerts if a.severity == "medium"]),
+        "low": len([a for a in alerts if a.severity == "low"]),
     }
 
 
@@ -132,3 +133,30 @@ def top_alerts(db: Session = Depends(get_db)):
         }
         for a in alerts
     ]
+# =========================================
+# 📊 6. MAIN DASHBOARD SUMMARY (FIX)
+# =========================================
+@router.get("/{budget_id}")
+def dashboard_summary(budget_id: int, db: Session = Depends(get_db)):
+
+    budget = db.query(models.Budget).filter(
+        models.Budget.budget_id == budget_id
+    ).first()
+
+    if not budget:
+        return {"error": "Budget not found"}
+
+    expenses = db.query(models.Expense).filter(
+        models.Expense.budget_id == budget_id
+    ).all()
+
+    total_spent = sum(float(e.amount) for e in expenses)
+    total_budget = float(budget.allocated_budget)
+    remaining = total_budget - total_spent
+
+    return {
+        "budget_id": budget_id,
+        "total_budget": total_budget,
+        "total_expense": total_spent,
+        "remaining": remaining
+    }

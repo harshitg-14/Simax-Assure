@@ -1,14 +1,30 @@
-// src/pages/Dashboard.jsx
-import React, { useEffect, useState } from 'react';
-import { budgetsApi, alertsApi, expensesApi, departmentsApi } from '../api/services';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { budgetsApi, alertsApi, expensesApi, dashboardApi } from '../api/services';
 import { useAuth } from '../context/AuthContext';
 import KpiCard from '../components/KpiCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 import './Dashboard.css';
 
-const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmt    = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
-const CustomTooltip = ({ active, payload, label }) => {
+const SEV_COLOR = { critical: 'var(--danger)', high: 'var(--warn)', medium: 'var(--accent2)', low: 'var(--success)' };
+const RISK_COLOR = { High: 'var(--danger)', Medium: 'var(--warn)', Low: 'var(--success)' };
+
+function buildMonthly(expenses, year) {
+  const t = {};
+  (expenses || []).forEach(e => {
+    if (!e.expense_date) return;
+    const d = new Date(e.expense_date);
+    if (d.getFullYear() !== year) return;
+    const m = d.getMonth();
+    t[m] = (t[m] || 0) + parseFloat(e.amount || 0);
+  });
+  return MONTHS.map((month, i) => ({ month, spend: t[i] || 0 }));
+}
+
+const ChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip">
@@ -16,7 +32,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       {payload.map(p => (
         <div key={p.name} className="ct-row">
           <span style={{ color: p.color }}>{p.name}</span>
-          <span>{fmt(p.value)}</span>
+          <span style={{ fontFamily: 'var(--mono)', color: 'var(--text)' }}>{fmt(p.value)}</span>
         </div>
       ))}
     </div>
@@ -25,228 +41,323 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const { selectedYear } = useAuth();
-  const [budgets, setBudgets]       = useState([]);
-  const [summaries, setSummaries]   = useState([]);
-  const [depts, setDepts]           = useState([]);
+  const [kpis, setKpis]             = useState(null);
   const [alerts, setAlerts]         = useState([]);
   const [expenses, setExpenses]     = useState([]);
+  const [alertSummary, setAlertSummary] = useState(null);
+  const [deptRisk, setDeptRisk]     = useState([]);
+  const [anomalies, setAnomalies]   = useState([]);
   const [loading, setLoading]       = useState(true);
 
-  const monthlyData = [
-    { month: 'Jan', spend: 1200000 }, { month: 'Feb', spend: 1850000 },
-    { month: 'Mar', spend: 2100000 }, { month: 'Apr', spend: 1600000 },
-    { month: 'May', spend: 2400000 }, { month: 'Jun', spend: 2900000 },
-    { month: 'Jul', spend: 1750000 }, { month: 'Aug', spend: 3200000 },
-    { month: 'Sep', spend: 2600000 }, { month: 'Oct', spend: 3800000 },
-    { month: 'Nov', spend: 3400000 }, { month: 'Dec', spend: 2800000 },
-  ];
-
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [budgetsRes, deptsRes, alertsRes, expensesRes] = await Promise.all([
-          budgetsApi.list(),
-          departmentsApi.list(),
-          alertsApi.listOpen(),
-          expensesApi.list(),
-        ]);
-
-        const allBudgets = budgetsRes.data || [];
-        const allDepts   = deptsRes.data || [];
-        const allAlerts  = alertsRes.data || [];
-        const allExp     = expensesRes.data || [];
-
-        setBudgets(allBudgets);
-        setDepts(allDepts);
-        setAlerts(allAlerts.slice(0, 3));
-        setExpenses(allExp.slice(0, 5));
-
-        // Get budget summaries for each budget
-        const filteredBudgets = allBudgets.filter(b => b.budget_year === selectedYear);
-        const sumRes = await Promise.all(filteredBudgets.map(b => budgetsApi.summary(b.budget_id)));
-        setSummaries(sumRes.map(r => r.data));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    setLoading(true);
+    Promise.all([
+      budgetsApi.getKPIs(selectedYear),
+      alertsApi.listOpen(),
+      expensesApi.list(),
+      dashboardApi.alertsSummary(),
+      dashboardApi.departmentRisk(),
+    ]).then(([k, a, e, s, r]) => {
+      const kpiData = k.data;
+      setKpis(kpiData);
+      setAlerts((a.data || []).slice(0, 5));
+      setExpenses(e.data || []);
+      setAlertSummary(s.data || null);
+      setDeptRisk(r.data || []);
+      const budgetIds = (kpiData?.departments || []).map(d => d.budget_id).filter(Boolean);
+      Promise.all(budgetIds.map(id => dashboardApi.anomalies(id).then(r => r.data || []).catch(() => [])))
+        .then(results => setAnomalies(results.flat()));
+    }).catch(console.error)
+      .finally(() => setLoading(false));
   }, [selectedYear]);
 
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
 
-  // Global KPIs from summaries
-  const totalBudget      = summaries.reduce((a, s) => a + (s?.allocated_budget || 0), 0);
-  const totalCommitted   = summaries.reduce((a, s) => a + (s?.committed_amount || 0), 0);
-  const totalSpent       = summaries.reduce((a, s) => a + (s?.spent_amount || 0), 0);
-  const totalRemaining   = summaries.reduce((a, s) => a + (s?.remaining_amount || 0), 0);
-  const utilizationPct   = totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(2) : 0;
+  const totalBudget    = kpis?.total_budget       || 0;
+  const totalCommitted = kpis?.total_commitments  || 0;
+  const totalSpent     = kpis?.total_expenses     || 0;
+  const remaining      = kpis?.remaining_budget   || 0;
+  const utilPct        = kpis?.utilization_pct    || 0;
+  const departments    = kpis?.departments        || [];
+  const monthlyData    = buildMonthly(expenses, selectedYear);
 
-  // Department chart data
-  const deptChartData = summaries.map(s => {
-    const budget = budgets.find(b => b.budget_id === s?.budget_id);
-    const dept   = depts.find(d => d.department_id === budget?.department_id);
-    return {
-      name:   dept?.department_name?.slice(0, 7) || 'Dept',
-      Budget: s?.allocated_budget || 0,
-      Spent:  s?.spent_amount || 0,
-    };
-  });
+  const deptChart = departments.map(d => ({
+    name:   (d.department_name || 'Dept').slice(0, 8),
+    Budget: d.allocated_budget || 0,
+    Spent:  d.spent_amount     || 0,
+  }));
 
-  const sevColor = (sev) => sev === 'critical' ? 'var(--danger)' : sev === 'high' ? 'var(--danger)' : sev === 'medium' ? 'var(--warn)' : 'var(--success)';
-  const sevIcon  = (sev) => sev === 'critical' || sev === 'high' ? '' : sev === 'medium' ? '' : '';
+  // Accurate counts from the dedicated summary endpoint (all alerts, not just 5)
+  const exportReport = () => {
+    const headers = ['Department', 'Allocated (INR)', 'Committed (INR)', 'Spent (INR)', 'Remaining (INR)', 'Utilization %'];
+    const rows = departments.map(d => [
+      d.department_name,
+      d.allocated_budget || 0,
+      d.committed_amount || 0,
+      d.spent_amount     || 0,
+      d.remaining_amount || 0,
+      d.allocated_budget > 0 ? ((d.spent_amount / d.allocated_budget) * 100).toFixed(1) : '0.0',
+    ]);
+    const csv  = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `budget-report-fy${selectedYear}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openCount     = kpis?.active_alerts         || 0;
+  const criticalCount = alertSummary?.critical       || 0;
+  const highCount     = alertSummary?.high           || 0;
+  const mediumCount   = alertSummary?.medium         || 0;
+  const lowCount      = alertSummary?.low            || 0;
 
   return (
     <div className="page fade-in">
       <div className="ph">
         <div>
-          <div className="ph-title">Executive Overview</div>
-          <div className="ph-sub">FY {selectedYear} · All Departments · Live data</div>
+          <div className="ph-title">Dashboard</div>
+          <div className="ph-sub">FY {selectedYear} &nbsp;&middot;&nbsp; All Departments &nbsp;&middot;&nbsp; Live</div>
         </div>
         <div className="ph-actions">
-          <button className="btn btn-ghost">⬇ Export</button>
+          <button className="btn btn-ghost" onClick={exportReport} disabled={departments.length === 0}>Export Report</button>
         </div>
       </div>
 
-      {alerts.length > 0 && (
+      {openCount > 0 && (
         <div className="alert-strip">
           <div className="pulse-dot" />
-          <div>
-            <strong>{alerts.length} Active Alerts</strong>
-            {' — '}{alerts[0]?.title} — {alerts[0]?.message?.slice(0, 60)}...
-          </div>
-          <div style={{ marginLeft: 'auto' }}>
-            <a href="/assurance" className="chip chip-danger" style={{ textDecoration: 'none' }}>View Alerts →</a>
-          </div>
+          <span>
+            <strong>{openCount} open alert{openCount !== 1 ? 's' : ''}</strong> require attention &mdash; {alerts[0]?.title}
+          </span>
+          <Link to="/assurance" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
+            <span className="chip chip-danger">View Alerts</span>
+          </Link>
         </div>
       )}
 
       <div className="kpi-grid">
-        <KpiCard icon="" label="Total Budget"     value={fmt(totalBudget)}    sub={`FY ${selectedYear} — All departments`} delay={0} />
-        <KpiCard icon="" label="Commitments"      value={fmt(totalCommitted)} sub={`${totalBudget > 0 ? ((totalCommitted/totalBudget)*100).toFixed(1) : 0}% of budget`} subType="warn" delay={0.06} />
-        <KpiCard icon="" label="Expenditure"      value={fmt(totalSpent)}     sub="Total actual spend" subType="up" pct={parseFloat(utilizationPct)} delay={0.12} />
-        <KpiCard icon="" label="Remaining Budget" value={fmt(totalRemaining)} sub="After expenses + commitments" subType="warn" delay={0.18} />
+        <KpiCard label="Total Budget"     value={fmt(totalBudget)}    sub={`FY ${selectedYear} · All departments`} delay={0} />
+        <KpiCard label="Commitments"      value={fmt(totalCommitted)} sub={`${totalBudget > 0 ? ((totalCommitted/totalBudget)*100).toFixed(1) : 0}% of allocated budget`} subType="warn" delay={0.06} />
+        <KpiCard label="Expenditure"      value={fmt(totalSpent)}     sub="Total actual spend to date" subType="up" pct={parseFloat(utilPct)} delay={0.12} />
+        <KpiCard label="Remaining Budget" value={fmt(remaining)}      sub="Net of expenses and commitments" delay={0.18} />
       </div>
 
       <div className="dash-grid">
+        {/* Main chart */}
         <div className="card">
           <div className="card-head">
-            <div className="card-title">Department Budget vs Actual</div>
+            <div className="card-title">Budget vs. Expenditure by Department</div>
             <span className="chip chip-accent">FY {selectedYear}</span>
           </div>
           <div className="card-body">
-            {deptChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={deptChartData} barGap={4}>
-                  <CartesianGrid stroke="rgba(28,48,80,0.5)" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: 'var(--text3)', fontSize: 11, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={v => `₹${(v/100000).toFixed(0)}L`} tick={{ fill: 'var(--text3)', fontSize: 10, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="Budget" fill="rgba(28,48,80,0.8)" radius={[4,4,0,0]} />
-                  <Bar dataKey="Spent"  fill="var(--accent)"      radius={[4,4,0,0]} />
+            {deptChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={deptChart} barGap={3} barCategoryGap="30%">
+                  <CartesianGrid stroke="rgba(24,37,64,0.8)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--text3)', fontSize: 10, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={v => `${(v/100000).toFixed(0)}L`} tick={{ fill: 'var(--text3)', fontSize: 10, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<ChartTip />} />
+                  <Bar dataKey="Budget" fill="rgba(91,143,255,0.35)" radius={[3,3,0,0]} />
+                  <Bar dataKey="Spent"  fill="var(--accent)"   radius={[3,3,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '40px 0' }}>
+              <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '48px 0', fontSize: 13 }}>
                 No budget data for FY {selectedYear}
               </div>
             )}
 
-            <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>Monthly Spend Trend</span>
-                <span className="chip chip-accent">{selectedYear}</span>
+            <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>Monthly Spend Trend</span>
+                <span className="chip chip-accent">FY {selectedYear}</span>
               </div>
-              <ResponsiveContainer width="100%" height={80}>
+              <ResponsiveContainer width="100%" height={70}>
                 <LineChart data={monthlyData}>
-                  <Line type="monotone" dataKey="spend" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="spend" stroke="var(--accent)" strokeWidth={1.5} dot={false} />
                   <XAxis dataKey="month" tick={{ fill: 'var(--text3)', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
-                  <Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }} />
+                  <Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
         </div>
 
+        {/* Right panel */}
         <div className="dash-right">
-          <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card">
             <div className="card-head">
-              <div className="card-title">Assurance Status</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--danger)' }}>
-                <div className="pulse-dot" />LIVE
+              <div className="card-title">Risk Overview</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--danger)' }}>
+                <div className="pulse-dot" style={{ width: 6, height: 6 }} />
+                LIVE
               </div>
             </div>
-            <div className="card-body" style={{ padding: 16 }}>
+            <div className="card-body" style={{ padding: 14 }}>
               <div className="mini-stat-grid">
                 {[
-                  { icon: '', label: 'Critical',  val: alerts.filter(a => a.severity === 'critical').length, color: 'var(--danger)', bg: 'rgba(244,63,94,0.1)' },
-                  { icon: '', label: 'High',      val: alerts.filter(a => a.severity === 'high').length,     color: 'var(--danger)', bg: 'rgba(244,63,94,0.08)' },
-                  { icon: '', label: 'Medium',    val: alerts.filter(a => a.severity === 'medium').length,   color: 'var(--warn)',   bg: 'rgba(245,158,11,0.1)' },
-                  { icon: '', label: 'Open',      val: alerts.length,                                        color: 'var(--accent)', bg: 'var(--accent-dim)' },
+                  { label: 'Critical', val: criticalCount, color: 'var(--danger)' },
+                  { label: 'High',     val: highCount,     color: 'var(--warn)' },
+                  { label: 'Medium',   val: mediumCount,   color: 'var(--accent2)' },
+                  { label: 'Low',      val: lowCount,      color: 'var(--success)' },
                 ].map(s => (
                   <div key={s.label} className="mini-stat">
-                    <div className="ms-icon" style={{ background: s.bg }}>{s.icon}</div>
-                    <div>
-                      <div className="ms-label">{s.label}</div>
-                      <div className="ms-val" style={{ color: s.color }}>{s.val}</div>
-                    </div>
+                    <div className="ms-label">{s.label}</div>
+                    <div className="ms-val" style={{ color: s.color }}>{s.val}</div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="card">
+          <div className="card" style={{ flex: 1 }}>
             <div className="card-head">
-              <div className="card-title">Recent Alerts</div>
-              <span className="chip chip-danger">{alerts.length} Open</span>
+              <div className="card-title">Active Alerts</div>
+              <span className="chip chip-danger">{openCount} Open</span>
             </div>
-            <div className="card-body" style={{ padding: 14 }}>
+            <div className="card-body" style={{ padding: 12 }}>
               <div className="alerts-list">
                 {alerts.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '16px 0' }}>✅ No active alerts</div>
+                  <div style={{ textAlign: 'center', color: 'var(--text3)', padding: '20px 0', fontSize: 12 }}>
+                    No active alerts
+                  </div>
                 ) : alerts.map(a => (
-                  <div key={a.alert_id} className="alert-item" style={{ '--alc': sevColor(a.severity) }}>
-                    <div className="alert-ico">{sevIcon(a.severity)}</div>
-                    <div>
-                      <div style={{ fontSize: 12.5, fontWeight: 700 }}>{a.title}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 2 }}>{a.message?.slice(0, 60)}...</div>
-                      <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 3 }}>
-                        {a.alert_code} · {a.category}
+                  <div
+                    key={a.alert_id}
+                    className="alert-item"
+                    style={{ '--alc': SEV_COLOR[(a.severity||'').toLowerCase()] || 'var(--warn)' }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{a.title}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.4 }}>
+                        {a.message?.slice(0, 72)}{a.message?.length > 72 ? '...' : ''}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 4 }}>
+                        {a.alert_code} &middot; {a.category}
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
+              {openCount > 5 && (
+                <Link to="/assurance" style={{ textDecoration: 'none' }}>
+                  <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--accent2)', fontFamily: 'var(--mono)', paddingTop: 10, marginTop: 8, borderTop: '1px solid var(--border)', cursor: 'pointer' }}>
+                    +{openCount - 5} more &rarr; View all
+                  </div>
+                </Link>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Recent Expenses */}
-      <div className="card">
+      {/* Department Risk Ranking */}
+      {deptRisk.length > 0 && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-head">
+            <div className="card-title">Department Risk Ranking</div>
+            <span className="chip chip-accent">{deptRisk.length} Departments</span>
+          </div>
+          <div className="card-body" style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {deptRisk.map((d, i) => {
+                const rc = RISK_COLOR[d.risk] || 'var(--text3)';
+                return (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 20, textAlign: 'right', fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', flexShrink: 0 }}>
+                      {i + 1}
+                    </div>
+                    <div style={{ flex: '0 0 140px', fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {d.department}
+                    </div>
+                    <div style={{ flex: 1, height: 6, background: 'var(--bg)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.min(d.usage_percent, 100)}%`,
+                        height: '100%',
+                        background: rc,
+                        borderRadius: 3,
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                    <div style={{ width: 48, textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, color: rc, flexShrink: 0 }}>
+                      {d.usage_percent}%
+                    </div>
+                    <div style={{
+                      width: 60, textAlign: 'center', flexShrink: 0,
+                      fontSize: 10, fontWeight: 600, fontFamily: 'var(--mono)',
+                      padding: '2px 8px', borderRadius: 4,
+                      background: `color-mix(in srgb, ${rc} 12%, transparent)`,
+                      color: rc, border: `1px solid color-mix(in srgb, ${rc} 25%, transparent)`,
+                    }}>
+                      {d.risk.toUpperCase()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spending Anomalies */}
+      {anomalies.length > 0 && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-head">
+            <div className="card-title">Spending Anomalies</div>
+            <span className="chip chip-danger">{anomalies.length} Detected</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Expense Ref</th><th>Vendor</th><th style={{ textAlign: 'right' }}>Amount</th><th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {anomalies.map((a, i) => (
+                  <tr key={i}>
+                    <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>EXP-{String(a.expense_id).padStart(4, '0')}</td>
+                    <td style={{ fontWeight: 500 }}>{a.vendor || '—'}</td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--danger)' }}>{fmt(a.amount)}</td>
+                    <td><span className="chip chip-danger" style={{ fontSize: 10 }}>{a.reason}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Transactions */}
+      <div className="card" style={{ marginTop: 20 }}>
         <div className="card-head">
           <div className="card-title">Recent Transactions</div>
-          <span className="chip chip-accent">Last {expenses.length}</span>
+          <Link to="/expenditure" style={{ textDecoration: 'none' }}>
+            <span className="chip chip-accent">View All {expenses.length > 5 ? `(${expenses.length})` : ''}</span>
+          </Link>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr>
-              <th>ID</th><th>Budget ID</th><th>Vendor</th><th>Category</th>
-              <th style={{ textAlign: 'right' }}>Amount</th><th>Date</th>
-            </tr></thead>
+            <thead>
+              <tr>
+                <th>Ref</th><th>Budget</th><th>Vendor</th><th>Category</th>
+                <th style={{ textAlign: 'right' }}>Amount</th><th>Date</th>
+              </tr>
+            </thead>
             <tbody>
               {expenses.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text3)', padding: 24 }}>No expenses yet</td></tr>
-              ) : expenses.map(e => (
+                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text3)', padding: 28, fontSize: 12 }}>No transactions recorded</td></tr>
+              ) : expenses.slice(0, 5).map(e => (
                 <tr key={e.expense_id}>
-                  <td className="mono" style={{ fontSize: 11, color: 'var(--text3)' }}>EXP-{String(e.expense_id).padStart(4,'0')}</td>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)' }}>EXP-{String(e.expense_id).padStart(4, '0')}</td>
                   <td><span className="chip chip-blue">BDG-{e.budget_id}</span></td>
-                  <td>{e.vendor || '—'}</td>
-                  <td style={{ color: 'var(--text2)' }}>{e.category || '—'}</td>
+                  <td style={{ fontWeight: 500 }}>{e.vendor || '—'}</td>
+                  <td style={{ color: 'var(--text2)', fontSize: 12 }}>{e.category || '—'}</td>
                   <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{fmt(e.amount)}</td>
-                  <td style={{ color: 'var(--text3)', fontSize: 12, fontFamily: 'var(--mono)' }}>{e.expense_date}</td>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{e.expense_date || '—'}</td>
                 </tr>
               ))}
             </tbody>

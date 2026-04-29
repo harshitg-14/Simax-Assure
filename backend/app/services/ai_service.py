@@ -1,4 +1,8 @@
 # backend/app/services/ai_service.py
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 import os
 import json
@@ -42,13 +46,13 @@ def generate_ai_alert(db, expense):
 
             # 🎯 Severity
             if overrun_pct > 25:
-                severity = "Critical"
+                severity = "critical"
                 score = 90
             elif overrun_pct > 10:
-                severity = "High"
+                severity = "high"
                 score = 70
             else:
-                severity = "Medium"
+                severity = "medium"
                 score = 50
 
             context = f"""
@@ -107,7 +111,7 @@ Overrun: {overrun_pct:.2f}%
             "insight": str(e),
             "risk": "System issue",
             "recommendation": "Check logs",
-            "severity": "Low",
+            "severity": "low",
             "score": 10,
             "type": "REACTIVE"
         }
@@ -153,13 +157,13 @@ def generate_predictive_alert(db, expense):
             over_pct = ((projected - allocated) / allocated) * 100 if allocated else 0
 
             if over_pct > 25:
-                severity = "Critical"
+                severity = "critical"
                 score = 85
             elif over_pct > 10:
-                severity = "High"
+                severity = "high"
                 score = 65
             else:
-                severity = "Medium"
+                severity = "medium"
                 score = 45
 
             context = f"""
@@ -219,7 +223,7 @@ Daily Avg: {avg_daily:.2f}
             "insight": str(e),
             "risk": "System issue",
             "recommendation": "Check logs",
-            "severity": "Low",
+            "severity": "low",
             "score": 10,
             "type": "PREDICTIVE"
         }
