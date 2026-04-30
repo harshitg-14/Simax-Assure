@@ -89,6 +89,21 @@ from app.db import Base
 
 
 # =========================
+# 👤 USER
+# =========================
+class User(Base):
+    __tablename__ = "users"
+
+    user_id      = Column(Integer, primary_key=True, index=True)
+    username     = Column(String(100), unique=True, nullable=False)
+    email        = Column(String(200), unique=True, nullable=False)
+    password_hash = Column(String(200), nullable=False)
+    role          = Column(String(50), nullable=False, default="viewer")
+    department_id = Column(Integer, ForeignKey("departments.department_id", ondelete="SET NULL"), nullable=True)
+    created_at    = Column(TIMESTAMP, server_default=func.now())
+
+
+# =========================
 # 🏢 DEPARTMENT
 # =========================
 class Department(Base):
@@ -151,6 +166,13 @@ class Commitment(Base):
     commitment_date = Column(Date, server_default=func.current_date())
     created_at = Column(TIMESTAMP, server_default=func.now())
 
+    # Approval workflow
+    status           = Column(String(20), nullable=True, default="pending")
+    submitted_by     = Column(String(100), nullable=True)
+    approved_by      = Column(String(100), nullable=True)
+    approved_at      = Column(TIMESTAMP, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+
 
 # =========================
 # 💸 EXPENSE
@@ -187,6 +209,13 @@ class Expense(Base):
     category = Column(String(100), nullable=True)
 
     created_at = Column(TIMESTAMP, server_default=func.now())
+
+    # Approval workflow
+    status           = Column(String(20), nullable=True, default="pending")
+    submitted_by     = Column(String(100), nullable=True)
+    approved_by      = Column(String(100), nullable=True)
+    approved_at      = Column(TIMESTAMP, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
 
 
 # =========================

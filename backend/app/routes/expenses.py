@@ -4,21 +4,22 @@ from app.db import get_db
 from app import schemas, models, crud
 
 from app.services.ai_service import generate_ai_alert, generate_predictive_alert
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
 
 @router.get("/")
 def list_expenses(department_id: int = None, budget_id: int = None,
-                  db: Session = Depends(get_db)):
+                  db: Session = Depends(get_db),
+                  current_user: models.User = Depends(get_current_user)):
     q = db.query(models.Expense)
-
-    if department_id:
+    if current_user.role == "department_head" and current_user.department_id:
+        q = q.filter(models.Expense.department_id == current_user.department_id)
+    elif department_id:
         q = q.filter(models.Expense.department_id == department_id)
-
     if budget_id:
         q = q.filter(models.Expense.budget_id == budget_id)
-
     return q.order_by(models.Expense.created_at.desc()).all()
 
 
@@ -35,10 +36,18 @@ def get_expense(expense_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/")
-def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db)):
+def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db),
+                   current_user: models.User = Depends(get_current_user)):
+
+    if current_user.role == "department_head" and current_user.department_id:
+        if data.department_id != current_user.department_id:
+            raise HTTPException(status_code=403, detail="You can only create expenses for your own department")
 
     # ✅ Create expense
     expense = crud.create_expense(db, data)
+    expense.submitted_by = current_user.username
+    expense.status = "pending"
+    db.commit()
 
     # =========================
     # 🔴 REACTIVE ALERT

@@ -11,6 +11,7 @@ const fmt    = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 const SEV_COLOR = { critical: 'var(--danger)', high: 'var(--warn)', medium: 'var(--accent2)', low: 'var(--success)' };
 const RISK_COLOR = { High: 'var(--danger)', Medium: 'var(--warn)', Low: 'var(--success)' };
+const RISK_BG    = { High: 'rgba(220,38,38,0.10)', Medium: 'rgba(217,119,6,0.10)', Low: 'rgba(5,150,105,0.10)' };
 
 function buildMonthly(expenses, year) {
   const t = {};
@@ -119,7 +120,7 @@ export default function Dashboard() {
       <div className="ph">
         <div>
           <div className="ph-title">Dashboard</div>
-          <div className="ph-sub">FY {selectedYear} &nbsp;&middot;&nbsp; All Departments &nbsp;&middot;&nbsp; Live</div>
+          <div className="ph-sub">FY {selectedYear} &nbsp;&middot;&nbsp; All Departments</div>
         </div>
         <div className="ph-actions">
           <button className="btn btn-ghost" onClick={exportReport} disabled={departments.length === 0}>Export Report</button>
@@ -132,8 +133,8 @@ export default function Dashboard() {
           <span>
             <strong>{openCount} open alert{openCount !== 1 ? 's' : ''}</strong> require attention &mdash; {alerts[0]?.title}
           </span>
-          <Link to="/assurance" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
-            <span className="chip chip-danger">View Alerts</span>
+          <Link to="/assurance" style={{ marginLeft: 'auto', textDecoration: 'none', fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', letterSpacing: '0.3px' }}>
+            View in Assurance &rarr;
           </Link>
         </div>
       )}
@@ -156,7 +157,7 @@ export default function Dashboard() {
             {deptChart.length > 0 ? (
               <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={deptChart} barGap={3} barCategoryGap="30%">
-                  <CartesianGrid stroke="rgba(24,37,64,0.8)" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: 'var(--text3)', fontSize: 10, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
                   <YAxis tickFormatter={v => `${(v/100000).toFixed(0)}L`} tick={{ fill: 'var(--text3)', fontSize: 10, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTip />} />
@@ -289,8 +290,8 @@ export default function Dashboard() {
                       width: 60, textAlign: 'center', flexShrink: 0,
                       fontSize: 10, fontWeight: 600, fontFamily: 'var(--mono)',
                       padding: '2px 8px', borderRadius: 4,
-                      background: `color-mix(in srgb, ${rc} 12%, transparent)`,
-                      color: rc, border: `1px solid color-mix(in srgb, ${rc} 25%, transparent)`,
+                      background: RISK_BG[d.risk] || 'var(--surface2)',
+                      color: rc,
                     }}>
                       {d.risk.toUpperCase()}
                     </div>
@@ -322,7 +323,7 @@ export default function Dashboard() {
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>EXP-{String(a.expense_id).padStart(4, '0')}</td>
                     <td style={{ fontWeight: 500 }}>{a.vendor || '—'}</td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600, color: 'var(--danger)' }}>{fmt(a.amount)}</td>
-                    <td><span className="chip chip-danger" style={{ fontSize: 10 }}>{a.reason}</span></td>
+                    <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{a.reason?.replace(/_/g, ' ')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -335,8 +336,8 @@ export default function Dashboard() {
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-head">
           <div className="card-title">Recent Transactions</div>
-          <Link to="/expenditure" style={{ textDecoration: 'none' }}>
-            <span className="chip chip-accent">View All {expenses.length > 5 ? `(${expenses.length})` : ''}</span>
+          <Link to="/expenditure" style={{ textDecoration: 'none', fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text3)', letterSpacing: '0.3px' }}>
+            View all &rarr;
           </Link>
         </div>
         <div style={{ overflowX: 'auto' }}>

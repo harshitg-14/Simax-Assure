@@ -58,16 +58,11 @@ export default function AIChat() {
           transition: 'all 0.2s',
         }}
       >
-        <span style={{
-          width: 6, height: 6, borderRadius: '50%',
-          background: open ? 'var(--text3)' : 'rgba(0,0,0,0.4)',
-          flexShrink: 0,
-        }} />
-        <span style={{
-          fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700,
-          letterSpacing: '0.8px',
-        }}>
-          {open ? 'CLOSE' : 'AI'}
+        {!open && (
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(0,0,0,0.4)', flexShrink: 0 }} />
+        )}
+        <span style={{ fontFamily: 'var(--sans)', fontSize: 12, fontWeight: 600 }}>
+          {open ? '× Close' : 'Ask AI'}
         </span>
       </button>
 

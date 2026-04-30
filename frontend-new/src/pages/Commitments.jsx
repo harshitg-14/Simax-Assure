@@ -1,17 +1,40 @@
 import { useEffect, useState } from 'react';
 import { commitmentsApi, departmentsApi, budgetsApi } from '../api/services';
+import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
+const STATUS_STYLE = {
+  pending:  { bg: 'rgba(217,119,6,0.1)',  color: '#d97706' },
+  approved: { bg: 'rgba(5,150,105,0.1)', color: '#059669' },
+  rejected: { bg: 'rgba(220,38,38,0.1)', color: '#dc2626' },
+};
+function StatusPill({ status }) {
+  const s = status || 'pending';
+  const c = STATUS_STYLE[s] || STATUS_STYLE.pending;
+  return (
+    <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+      padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase',
+      background: c.bg, color: c.color }}>
+      {s}
+    </span>
+  );
+}
+
 export default function Commitments() {
+  const { isDeptHead, userDeptId } = useAuth();
+
   const [commitments, setCommitments] = useState([]);
   const [depts, setDepts]             = useState([]);
   const [budgets, setBudgets]         = useState([]);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
-  const [form, setForm] = useState({ budget_id: '', department_id: '', description: '', amount: '' });
+  const [form, setForm] = useState({
+    budget_id: '', department_id: isDeptHead && userDeptId ? String(userDeptId) : '',
+    description: '', amount: '',
+  });
 
   const load = () => {
     Promise.all([commitmentsApi.list(), departmentsApi.list(), budgetsApi.list()])
@@ -42,7 +65,7 @@ export default function Commitments() {
         description:   form.description,
         amount:        +form.amount,
       });
-      setForm({ budget_id: '', department_id: '', description: '', amount: '' });
+      setForm({ budget_id: '', department_id: isDeptHead && userDeptId ? String(userDeptId) : '', description: '', amount: '' });
       load();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to create commitment.');
@@ -97,13 +120,14 @@ export default function Commitments() {
                   <th style={{ textAlign: 'right' }}>Amount</th>
                   <th>FY</th>
                   <th>Date</th>
+                  <th>Status</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {commitments.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', color: 'var(--text3)', padding: 28, fontSize: 12 }}>
+                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text3)', padding: 28, fontSize: 12 }}>
                       No commitments recorded
                     </td>
                   </tr>
@@ -119,6 +143,7 @@ export default function Commitments() {
                     <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{fmt(c.amount)}</td>
                     <td style={{ fontFamily: 'var(--mono)', color: 'var(--text3)', fontSize: 11 }}>{getBudgetYear(c.budget_id)}</td>
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{c.commitment_date || '—'}</td>
+                    <td><StatusPill status={c.status} /></td>
                     <td>
                       <button
                         className="btn btn-ghost"
@@ -147,7 +172,12 @@ export default function Commitments() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
                   <label>Department</label>
-                  <select required value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value, budget_id: '' })}>
+                  <select
+                    required
+                    disabled={isDeptHead && !!userDeptId}
+                    value={form.department_id}
+                    onChange={e => setForm({ ...form, department_id: e.target.value, budget_id: '' })}
+                  >
                     <option value="">Select department</option>
                     {depts.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
                   </select>

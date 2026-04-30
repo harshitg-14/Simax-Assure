@@ -4,10 +4,28 @@ import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+
+const STATUS_STYLE = {
+  pending:  { bg: 'rgba(217,119,6,0.1)',  color: '#d97706' },
+  approved: { bg: 'rgba(5,150,105,0.1)', color: '#059669' },
+  rejected: { bg: 'rgba(220,38,38,0.1)', color: '#dc2626' },
+};
+function StatusPill({ status }) {
+  const s = status || 'pending';
+  const c = STATUS_STYLE[s] || STATUS_STYLE.pending;
+  return (
+    <span style={{ fontSize: 10, fontFamily: 'var(--mono)', fontWeight: 700,
+      padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase',
+      background: c.bg, color: c.color }}>
+      {s}
+    </span>
+  );
+}
+
 const CATEGORIES = ['Cloud Infrastructure', 'Software License', 'Digital Marketing', 'Logistics', 'Utilities', 'Travel', 'Professional Services', 'Other'];
 
 export default function Expenditure() {
-  const { canViewAllDepts } = useAuth();
+  const { canViewAllDepts, isDeptHead, userDeptId } = useAuth();
   const [expenses, setExpenses]       = useState([]);
   const [depts, setDepts]             = useState([]);
   const [budgets, setBudgets]         = useState([]);
@@ -17,7 +35,8 @@ export default function Expenditure() {
   const [error, setError]             = useState('');
   const [filterDept, setFilterDept]   = useState('');
   const [form, setForm] = useState({
-    department_id: '', budget_id: '', commitment_id: '',
+    department_id: isDeptHead && userDeptId ? String(userDeptId) : '',
+    budget_id: '', commitment_id: '',
     vendor: '', amount: '', expense_date: '',
     category: 'Cloud Infrastructure',
   });
@@ -51,7 +70,7 @@ export default function Expenditure() {
         expense_date:  form.expense_date || undefined,
         category:      form.category,
       });
-      setForm({ department_id: '', budget_id: '', commitment_id: '', vendor: '', amount: '', expense_date: '', category: 'Cloud Infrastructure' });
+      setForm({ department_id: isDeptHead && userDeptId ? String(userDeptId) : '', budget_id: '', commitment_id: '', vendor: '', amount: '', expense_date: '', category: 'Cloud Infrastructure' });
       load();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to record expense.');
@@ -144,13 +163,13 @@ export default function Expenditure() {
               <thead>
                 <tr>
                   <th>Ref</th><th>Department</th><th>Vendor</th><th>Category</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th><th>Date</th><th>Budget</th><th />
+                  <th style={{ textAlign: 'right' }}>Amount</th><th>Date</th><th>Budget</th><th>Status</th><th />
                 </tr>
               </thead>
               <tbody>
                 {displayedExpenses.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text3)', padding: 28, fontSize: 12 }}>
+                    <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text3)', padding: 28, fontSize: 12 }}>
                       No expenses recorded
                     </td>
                   </tr>
@@ -165,6 +184,7 @@ export default function Expenditure() {
                     <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{fmt(e.amount)}</td>
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{e.expense_date || '—'}</td>
                     <td><span className="chip chip-accent" style={{ fontSize: 9 }}>BDG-{e.budget_id}</span></td>
+                    <td><StatusPill status={e.status} /></td>
                     <td>
                       <button
                         className="btn btn-ghost"
@@ -182,7 +202,6 @@ export default function Expenditure() {
         <div className="card">
           <div className="card-head">
             <div className="card-title">Log Expense</div>
-            <span className="chip chip-warn">Runs Checks</span>
           </div>
           <div className="card-body">
             {error && (
@@ -194,7 +213,12 @@ export default function Expenditure() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div className="form-group">
                   <label>Department</label>
-                  <select required value={form.department_id} onChange={e => setForm({ ...form, department_id: e.target.value, budget_id: '', commitment_id: '' })}>
+                  <select
+                    required
+                    disabled={isDeptHead && !!userDeptId}
+                    value={form.department_id}
+                    onChange={e => setForm({ ...form, department_id: e.target.value, budget_id: '', commitment_id: '' })}
+                  >
                     <option value="">Select department</option>
                     {depts.map(d => <option key={d.department_id} value={d.department_id}>{d.department_name}</option>)}
                   </select>

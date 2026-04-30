@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { departmentsApi, expensesApi } from '../api/services';
+import { useTheme } from '../context/ThemeContext';
 import './Topbar.css';
 
 const PAGE_LABELS = {
@@ -11,9 +12,12 @@ const PAGE_LABELS = {
   '/assurance':   'Risk & Compliance',
   '/reports':     'Reports & Analytics',
   '/departments': 'Departments',
+  '/users':       'User Management',
+  '/approvals':   'Approval Workflow',
 };
 
 const SEV_COLOR = { critical: '#dc2626', high: '#d97706', medium: '#c9970a', low: '#059669' };
+const SEV_BG    = { critical: 'rgba(220,38,38,0.1)', high: 'rgba(217,119,6,0.1)', medium: 'rgba(201,151,10,0.1)', low: 'rgba(5,150,105,0.1)' };
 
 const BellIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -22,28 +26,47 @@ const BellIcon = () => (
   </svg>
 );
 
-const GearIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="8" cy="8" r="2.5" strokeWidth="1.2"/>
-    <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" strokeWidth="1.2" strokeLinecap="round"/>
+const SunIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
   </svg>
 );
 
 export default function Topbar({ onNewEntry, alertCount = 0, openAlerts = [] }) {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const label = PAGE_LABELS[pathname] || 'Simax Assure';
+  const navigate     = useNavigate();
+  const label        = PAGE_LABELS[pathname] || 'Simax Assure';
+  const { theme, toggleTheme } = useTheme();
 
-  const [bellOpen, setBellOpen]       = useState(false);
-  const [searchVal, setSearchVal]     = useState('');
-  const [searchOpen, setSearchOpen]   = useState(false);
-  const [searchData, setSearchData]   = useState([]);
+  const [bellOpen, setBellOpen]         = useState(false);
+  const [seenIds, setSeenIds]           = useState(() => new Set());
+  const [ringing, setRinging]           = useState(false);
+  const [searchVal, setSearchVal]       = useState('');
+  const [searchOpen, setSearchOpen]     = useState(false);
+  const [searchData, setSearchData]     = useState([]);
   const [searchLoaded, setSearchLoaded] = useState(false);
 
   const bellRef   = useRef(null);
   const searchRef = useRef(null);
+  const prevCount = useRef(alertCount);
 
-  /* close on outside click */
+  // Ring bell when new alerts arrive
+  useEffect(() => {
+    if (alertCount > prevCount.current) {
+      setRinging(true);
+      setTimeout(() => setRinging(false), 1500);
+    }
+    prevCount.current = alertCount;
+  }, [alertCount]);
+
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e) => {
       if (bellRef.current   && !bellRef.current.contains(e.target))   setBellOpen(false);
@@ -52,6 +75,21 @@ export default function Topbar({ onNewEntry, alertCount = 0, openAlerts = [] }) 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Mark all as read when bell opens
+  const openBell = () => {
+    setBellOpen(o => !o);
+    if (!bellOpen) {
+      setSeenIds(new Set(openAlerts.map(a => a.alert_id)));
+    }
+  };
+
+  const markAllRead = (e) => {
+    e.stopPropagation();
+    setSeenIds(new Set(openAlerts.map(a => a.alert_id)));
+  };
+
+  const unreadCount = openAlerts.filter(a => !seenIds.has(a.alert_id)).length;
 
   const loadSearchData = async () => {
     if (searchLoaded) return;
@@ -68,12 +106,6 @@ export default function Topbar({ onNewEntry, alertCount = 0, openAlerts = [] }) 
   const results = searchVal.trim().length >= 1
     ? searchData.filter(i => i.label.toLowerCase().includes(searchVal.toLowerCase())).slice(0, 7)
     : [];
-
-  const handleResultClick = (path) => {
-    setSearchVal('');
-    setSearchOpen(false);
-    navigate(path);
-  };
 
   return (
     <header className="topbar">
@@ -109,7 +141,7 @@ export default function Topbar({ onNewEntry, alertCount = 0, openAlerts = [] }) 
               ) : results.length === 0 ? (
                 <div className="search-hint">No results for &ldquo;{searchVal}&rdquo;</div>
               ) : results.map((r, i) => (
-                <div key={i} className="search-result" onClick={() => handleResultClick(r.path)}>
+                <div key={i} className="search-result" onClick={() => { setSearchVal(''); setSearchOpen(false); navigate(r.path); }}>
                   <span className="sr-label">{r.label}</span>
                   <span className="sr-sub">{r.sub}</span>
                 </div>
@@ -118,41 +150,91 @@ export default function Topbar({ onNewEntry, alertCount = 0, openAlerts = [] }) 
           )}
         </div>
 
+        {/* Theme toggle */}
+        <div
+          className="topbar-icon-btn"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+        </div>
+
         {/* Bell */}
-        <div className="topbar-icon-btn" ref={bellRef} title={alertCount > 0 ? `${alertCount} open alerts` : 'Notifications'} onClick={() => setBellOpen(o => !o)}>
+        <div
+          className={`topbar-icon-btn${ringing ? ' bell-ringing' : ''}`}
+          ref={bellRef}
+          title={alertCount > 0 ? `${alertCount} open alerts` : 'No alerts'}
+          onClick={openBell}
+        >
           <BellIcon />
+
+          {/* Badge — shows unread when closed, total when open */}
           {alertCount > 0 && (
-            <span className="bell-count">{alertCount > 99 ? '99+' : alertCount}</span>
+            <span className={`bell-count${unreadCount > 0 && !bellOpen ? ' bell-count-pulse' : ''}`}>
+              {bellOpen ? alertCount : unreadCount > 0 ? unreadCount : alertCount}
+            </span>
           )}
 
           {bellOpen && (
             <div className="bell-dropdown" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
               <div className="bd-head">
-                <span className="bd-title">Open Alerts</span>
-                <span className="bd-count">{alertCount}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="bd-title">Alerts</span>
+                  {alertCount > 0 && (
+                    <span className="bd-count">{alertCount} open</span>
+                  )}
+                </div>
+                {unreadCount > 0 && (
+                  <button className="bd-mark-read" onClick={markAllRead}>
+                    Mark all read
+                  </button>
+                )}
               </div>
+
+              {/* List */}
               <div className="bd-list">
                 {openAlerts.length === 0 ? (
-                  <div className="bd-empty">No open alerts</div>
-                ) : openAlerts.map(a => (
-                  <div key={a.alert_id} className="bd-item">
-                    <span className="bd-dot" style={{ background: SEV_COLOR[(a.severity || '').toLowerCase()] || '#d97706' }} />
-                    <div className="bd-body">
-                      <div className="bd-item-title">{a.title}</div>
-                      <div className="bd-item-code">{a.alert_code}</div>
-                    </div>
+                  <div className="bd-empty">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom: 8, color: 'var(--text3)' }}>
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                      <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    <div>All clear — no open alerts</div>
                   </div>
-                ))}
+                ) : openAlerts.map(a => {
+                  const sev  = (a.severity || 'medium').toLowerCase();
+                  const isNew = !seenIds.has(a.alert_id);
+                  return (
+                    <div key={a.alert_id} className={`bd-item${isNew ? ' bd-item-new' : ''}`}>
+                      <span className="bd-dot" style={{ background: SEV_COLOR[sev] || SEV_COLOR.medium }} />
+                      <div className="bd-body">
+                        <div className="bd-item-title">{a.title}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <span style={{
+                            fontSize: 9, fontFamily: 'var(--mono)', fontWeight: 700,
+                            padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase',
+                            background: SEV_BG[sev] || SEV_BG.medium,
+                            color: SEV_COLOR[sev] || SEV_COLOR.medium,
+                          }}>
+                            {sev}
+                          </span>
+                          <span className="bd-item-code">{a.alert_code?.replace(/_/g, ' ')}</span>
+                        </div>
+                      </div>
+                      {isNew && <span className="bd-new-dot" />}
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* Footer */}
               <Link to="/assurance" className="bd-footer" onClick={() => setBellOpen(false)}>
                 View all in Assurance Monitor &rarr;
               </Link>
             </div>
           )}
-        </div>
-
-        <div className="topbar-icon-btn" title="Settings">
-          <GearIcon />
         </div>
 
         {onNewEntry && (

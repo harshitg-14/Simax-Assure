@@ -22,6 +22,26 @@
   --sans:       'Inter', sans-serif;
 }
 
+[data-theme="light"] {
+  --bg:         #f4f6fa;
+  --bg2:        #edf0f6;
+  --surface:    #ffffff;
+  --surface2:   #f0f3f8;
+  --surface3:   #e6ecf4;
+  --border:     #d4dbe8;
+  --border2:    #c2ccdc;
+  --accent:     #b8890a;
+  --accent-dim: rgba(184,137,10,0.08);
+  --accent2:    #9a7209;
+  --accent3:    #2563eb;
+  --warn:       #c97b00;
+  --danger:     #c81f1f;
+  --success:    #047857;
+  --text:       #1a2840;
+  --text2:      #4a5e78;
+  --text3:      #8496b2;
+}
+
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -56,14 +76,22 @@ body {
 /* ── Chips ── */
 .chip {
   font-family: var(--mono); font-size: 10px; padding: 2px 8px;
-  border-radius: 4px; font-weight: 600; display: inline-block;
+  border-radius: 4px; font-weight: 500; display: inline-block;
   text-transform: uppercase; letter-spacing: 0.4px;
+  background: var(--surface2); color: var(--text2);
 }
-.chip-accent  { background: var(--accent-dim);          color: var(--accent2); }
-.chip-blue    { background: rgba(201,151,10,0.10);      color: var(--accent2); }
-.chip-warn    { background: rgba(217,119,6,0.12);       color: var(--warn); }
-.chip-danger  { background: rgba(220,38,38,0.10);       color: var(--danger); }
-.chip-success { background: rgba(5,150,105,0.10);       color: var(--success); }
+/* Neutral variants — counts, labels, metadata */
+.chip-accent  { background: var(--surface2); color: var(--text2); }
+.chip-warn    { background: var(--surface2); color: var(--text2); }
+/* Entity names — no background, plain readable text */
+.chip-blue    {
+  background: transparent; color: var(--text2);
+  text-transform: none; letter-spacing: 0;
+  font-family: var(--sans); font-size: 12px; padding: 1px 0; font-weight: 500;
+}
+/* Status-only — retain minimal color for semantic meaning */
+.chip-danger  { background: rgba(220,38,38,0.07);  color: rgba(220,38,38,0.60); }
+.chip-success { background: rgba(5,150,105,0.07);  color: rgba(5,150,105,0.60); }
 
 /* ── Buttons ── */
 .btn {
@@ -107,8 +135,7 @@ body {
 /* ── Forms ── */
 .form-group { display: flex; flex-direction: column; gap: 5px; }
 .form-group label {
-  font-size: 11px; font-weight: 500; color: var(--text3);
-  font-family: var(--mono); text-transform: uppercase; letter-spacing: 1px;
+  font-size: 12px; font-weight: 500; color: var(--text2);
 }
 .form-group input,
 .form-group select,

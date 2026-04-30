@@ -51,6 +51,30 @@ export const alertsApi = {
   delete:      (id)         => api.delete(`/alerts/${id}`),
 };
 
+export const approvalsApi = {
+  summary:           ()           => api.get('/approvals/summary'),
+  pending:           ()           => api.get('/approvals/pending'),
+  history:           ()           => api.get('/approvals/history'),
+  approveCommitment: (id)         => api.put(`/approvals/commitments/${id}/approve`),
+  rejectCommitment:  (id, reason) => api.put(`/approvals/commitments/${id}/reject`, { reason }),
+  approveExpense:    (id)         => api.put(`/approvals/expenses/${id}/approve`),
+  rejectExpense:     (id, reason) => api.put(`/approvals/expenses/${id}/reject`, { reason }),
+};
+
 export const aiApi = {
   ask: (query) => api.get('/ai/ask', { params: { query } }),
+};
+
+export const authApi = {
+  login:          (username, password)           => api.post('/auth/login', { username, password }),
+  me:             ()                             => api.get('/auth/me'),
+  changePassword: (current_password, new_password) => api.put('/auth/change-password', { current_password, new_password }),
+};
+
+export const usersApi = {
+  list:          ()              => api.get('/users/'),
+  create:        (data)          => api.post('/users/', data),
+  update:        (id, data)      => api.put(`/users/${id}`, data),
+  resetPassword: (id, password)  => api.put(`/users/${id}/reset-password`, { new_password: password }),
+  delete:        (id)            => api.delete(`/users/${id}`),
 };
