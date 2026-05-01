@@ -29,14 +29,10 @@
 .kpi-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 8px; padding: 18px 20px;
-  position: relative; overflow: hidden;
-  transition: border-color 0.2s;
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .kpi-card:hover { border-color: var(--border2); }
-.kpi-card::after {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-}
-.kpi-card::after { background: var(--border2); }
 
 .kpi-label {
   font-family: var(--mono); font-size: 10px; color: var(--text3);
@@ -63,7 +59,8 @@
 /* Mini stats */
 .mini-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .mini-stat {
-  background: var(--surface2); border-radius: 6px; padding: 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 12px;
   display: flex; align-items: flex-start; flex-direction: column; gap: 6px;
 }
 .ms-label {
@@ -77,6 +74,7 @@
 .alert-item {
   display: flex; align-items: flex-start; gap: 0;
   background: var(--surface2); border-radius: 6px;
+  border: 1px solid var(--border);
   border-left: 3px solid var(--alc, var(--warn));
   padding: 11px 14px;
 }

@@ -2,8 +2,8 @@
 .topbar {
   position: sticky; top: 0; z-index: 100;
   background: var(--surface);
-  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
   padding: 0 28px; height: 56px;
   display: flex; align-items: center; justify-content: space-between;
 }
