@@ -17,6 +17,7 @@ from app.routes import (
     auth,
     users,
     approvals,
+    slm,
 )
 
 app = FastAPI(title="Simax Assure API")
@@ -68,6 +69,7 @@ app.include_router(dashboard.router)
 app.include_router(alerts.router)
 app.include_router(ai.router)
 app.include_router(approvals.router)
+app.include_router(slm.router)
 
 
 DEFAULT_USERS = [

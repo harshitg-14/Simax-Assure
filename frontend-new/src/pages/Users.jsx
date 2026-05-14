@@ -160,15 +160,6 @@ export default function Users() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{
-                          width: 28, height: 28, borderRadius: 7,
-                          background: 'var(--surface2)', border: '1px solid var(--border)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700,
-                          color: 'var(--accent2)', flexShrink: 0,
-                        }}>
-                          {u.username[0].toUpperCase()}
-                        </div>
                         <span style={{ fontWeight: 600 }}>{u.username}</span>
                         {u.user_id === me?.user_id && (
                           <span style={{ fontSize: 9, fontFamily: 'var(--mono)', color: 'var(--text3)', background: 'var(--surface2)', padding: '1px 5px', borderRadius: 3 }}>YOU</span>
