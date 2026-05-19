@@ -1,10 +1,15 @@
 import json
+import logging
 import requests
 from app.models import Expense, Budget, Department
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
+# Use 127.0.0.1 explicitly — on Windows, localhost can resolve to IPv6 (::1)
+# which may not be what Ollama is listening on.
+OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 OLLAMA_MODEL = "mistral"
-TIMEOUT = 60
+TIMEOUT = 120  # Mistral cold-start on first request can take 60-90s on CPU
+
+logger = logging.getLogger(__name__)
 
 
 def build_context(db) -> str:
@@ -55,6 +60,7 @@ User Question: {query}
 Reply with ONLY raw JSON, no markdown, no explanation:
 {{"summary": "...", "insight": "...", "risk": "...", "recommendation": "..."}}"""
 
+    logger.info("SLM request: model=%s url=%s", OLLAMA_MODEL, OLLAMA_URL)
     try:
         response = requests.post(
             OLLAMA_URL,
@@ -66,8 +72,10 @@ Reply with ONLY raw JSON, no markdown, no explanation:
             },
             timeout=TIMEOUT
         )
+        logger.info("SLM response status: %s", response.status_code)
         response.raise_for_status()
         raw = response.json().get("response", "").strip()
+        logger.info("SLM raw response (first 200 chars): %s", raw[:200])
 
         if raw.startswith("```"):
             raw = raw.replace("```json", "").replace("```", "").strip()
@@ -83,8 +91,19 @@ Reply with ONLY raw JSON, no markdown, no explanation:
                 "model": "slm"
             }
 
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
+        logger.error("SLM ConnectionError — Ollama not reachable at %s: %s", OLLAMA_URL, e)
         return None  # signals caller to fall back to Gemini
 
+    except requests.exceptions.Timeout:
+        logger.error("SLM Timeout — model took longer than %ss to respond", TIMEOUT)
+        return None
+
+    except requests.exceptions.HTTPError as e:
+        # 404 = model not found (wrong model name), 500 = Ollama internal error
+        logger.error("SLM HTTPError %s — body: %s", e.response.status_code, e.response.text[:300])
+        return None
+
     except Exception as e:
+        logger.error("SLM unexpected error: %s: %s", type(e).__name__, e)
         return None

@@ -41,7 +41,7 @@ def slm_status():
     """Check if Ollama + Mistral is running."""
     import requests as req
     try:
-        resp = req.get("http://localhost:11434/api/tags", timeout=5)
+        resp = req.get("http://127.0.0.1:11434/api/tags", timeout=5)
         models = [m["name"] for m in resp.json().get("models", [])]
         mistral_ready = any("mistral" in m for m in models)
         return {

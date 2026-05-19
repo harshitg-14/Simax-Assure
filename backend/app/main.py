@@ -1,4 +1,7 @@
+import logging
 from fastapi import FastAPI
+
+logging.basicConfig(level=logging.INFO)
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
