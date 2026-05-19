@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -6,6 +7,21 @@ from datetime import datetime
 from app.db import get_db
 from app import models
 from app.auth import get_current_user
+from app.services.email_service import (
+    notify_expense_approved, notify_expense_rejected,
+    notify_commitment_approved, notify_commitment_rejected,
+    notify_commitment_submitted,
+)
+
+
+def _dept_name(db, dept_id) -> str:
+    d = db.query(models.Department).filter(models.Department.department_id == dept_id).first()
+    return d.department_name if d else "Unknown"
+
+
+def _user_email(db, username: str) -> str:
+    u = db.query(models.User).filter(models.User.username == username).first()
+    return u.email if u and u.email else ""
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
@@ -123,6 +139,12 @@ def approve_commitment(commitment_id: int, db: Session = Depends(get_db),
     c.approved_by = current_user.username
     c.approved_at = datetime.utcnow()
     db.commit()
+    if c.submitted_by:
+        email = _user_email(db, c.submitted_by)
+        if email:
+            asyncio.create_task(notify_commitment_approved(
+                email, c, _dept_name(db, c.department_id), current_user.username
+            ))
     return {"detail": "Approved", "status": "approved"}
 
 
@@ -139,6 +161,13 @@ def reject_commitment(commitment_id: int, data: ActionRequest, db: Session = Dep
     c.approved_at      = datetime.utcnow()
     c.rejection_reason = data.reason
     db.commit()
+    if c.submitted_by:
+        email = _user_email(db, c.submitted_by)
+        if email:
+            asyncio.create_task(notify_commitment_rejected(
+                email, c, _dept_name(db, c.department_id),
+                current_user.username, data.reason
+            ))
     return {"detail": "Rejected", "status": "rejected"}
 
 
@@ -154,6 +183,12 @@ def approve_expense(expense_id: int, db: Session = Depends(get_db),
     e.approved_by = current_user.username
     e.approved_at = datetime.utcnow()
     db.commit()
+    if e.submitted_by:
+        email = _user_email(db, e.submitted_by)
+        if email:
+            asyncio.create_task(notify_expense_approved(
+                email, e, _dept_name(db, e.department_id), current_user.username
+            ))
     return {"detail": "Approved", "status": "approved"}
 
 
@@ -170,4 +205,11 @@ def reject_expense(expense_id: int, data: ActionRequest, db: Session = Depends(g
     e.approved_at      = datetime.utcnow()
     e.rejection_reason = data.reason
     db.commit()
+    if e.submitted_by:
+        email = _user_email(db, e.submitted_by)
+        if email:
+            asyncio.create_task(notify_expense_rejected(
+                email, e, _dept_name(db, e.department_id),
+                current_user.username, data.reason
+            ))
     return {"detail": "Rejected", "status": "rejected"}

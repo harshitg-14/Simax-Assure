@@ -1,12 +1,26 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app import schemas, models, crud
 
 from app.services.ai_service import generate_ai_alert, generate_predictive_alert
+from app.services.email_service import notify_expense_submitted
 from app.auth import get_current_user
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
+
+
+def _finance_emails(db) -> list[str]:
+    users = db.query(models.User).filter(
+        models.User.role.in_(["admin", "finance_manager"])
+    ).all()
+    return [u.email for u in users if u.email and "@" in u.email]
+
+
+def _dept_name(db, dept_id) -> str:
+    d = db.query(models.Department).filter(models.Department.department_id == dept_id).first()
+    return d.department_name if d else "Unknown"
 
 
 @router.get("/")
@@ -48,6 +62,15 @@ def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db),
     expense.submitted_by = current_user.username
     expense.status = "pending"
     db.commit()
+
+    # ── Email notification to finance team ──
+    asyncio.create_task(
+        notify_expense_submitted(
+            _finance_emails(db), expense,
+            _dept_name(db, expense.department_id),
+            current_user.username
+        )
+    )
 
     # =========================
     # 🔴 REACTIVE ALERT
