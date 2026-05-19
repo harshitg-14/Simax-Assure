@@ -28,19 +28,29 @@
 }
 .kpi-card {
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; padding: 18px 20px;
+  border-radius: 10px; padding: 20px 22px;
   box-shadow: var(--shadow-card);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: all 0.2s;
+  position: relative; overflow: hidden;
 }
-.kpi-card:hover { border-color: var(--border2); }
+.kpi-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent2) 100%);
+  opacity: 0; transition: opacity 0.2s;
+}
+.kpi-card:hover { border-color: var(--border2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.kpi-card:hover::before { opacity: 1; }
 
 .kpi-label {
   font-family: var(--mono); font-size: 10px; color: var(--text3);
   text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px;
 }
 .kpi-value {
-  font-size: 24px; font-weight: 700; line-height: 1;
-  letter-spacing: -0.5px; color: var(--text);
+  font-size: 26px; font-weight: 800; line-height: 1;
+  letter-spacing: -1px; color: var(--text);
+  font-family: var(--mono);
 }
 .kpi-sub   { margin-top: 8px; font-size: 11px; color: var(--text3); }
 .kpi-sub.up   { color: var(--success); }

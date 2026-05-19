@@ -76,7 +76,7 @@ function AppLayout() {
     <>
       <div style={{ display: 'flex', minHeight: '100vh' }}>
         <Sidebar alertCount={alertCount} pendingApprovals={pendingApprovals} />
-        <div style={{ marginLeft: 256, flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
+        <div style={{ marginLeft: 240, flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
           <Topbar onNewEntry={() => setShowModal(true)} alertCount={alertCount} openAlerts={openAlerts} />
           <div style={{ flex: 1 }}>
             <Routes>
