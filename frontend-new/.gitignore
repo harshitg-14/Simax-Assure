@@ -1,23 +1,98 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# =========================
+# NODE / REACT
+# =========================
+node_modules/
+build/
+dist/
+.pnp
 .pnp.js
 
-# testing
-/coverage
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# production
-/build
+# coverage
+coverage/
 
-# misc
-.DS_Store
+# =========================
+# PYTHON / FASTAPI
+# =========================
+venv/
+env/
+ENV/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# virtual env configs
+.python-version
+
+# =========================
+# ENV FILES
+# =========================
+.env
+.env.*
+!.env.example
+
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# =========================
+# DATABASE FILES
+# =========================
+*.db
+*.sqlite3
+
+# =========================
+# OS FILES
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / EDITOR
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# CLAUDE / AI TOOLING
+# =========================
+.claude/
+
+# =========================
+# TEMP / OFFICE FILES
+# =========================
+~$*
+*.tmp
+*.temp
+
+# =========================
+# UPLOADS / GENERATED FILES
+# =========================
+uploads/
+demo_screenshots/
+
+# =========================
+# CACHE
+# =========================
+.cache/
+.pytest_cache/
+
+# =========================
+# DOCKER
+# =========================
+*.log
+
+# =========================
+# OPTIONAL
+# =========================
+# Uncomment if needed
+
+# package-lock.json
+# yarn.lock
