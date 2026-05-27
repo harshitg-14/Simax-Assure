@@ -24,6 +24,11 @@ export const dashboardApi = {
   departmentRisk: ()     => api.get('/dashboard/department-risk'),
   alertsSummary:  ()     => api.get('/dashboard/alerts-summary'),
   topAlerts:      ()     => api.get('/dashboard/top-alerts'),
+  forecast:       (year) => api.get('/dashboard/forecast', { params: { year } }),
+};
+
+export const auditApi = {
+  list: (params) => api.get('/audit/', { params }),
 };
 
 export const commitmentsApi = {
@@ -38,6 +43,21 @@ export const expensesApi = {
   get:    (id)     => api.get(`/expenses/${id}`),
   create: (data)   => api.post('/expenses/', data),
   delete: (id)     => api.delete(`/expenses/${id}`),
+  bulkImport: (file, year) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post(`/expenses/bulk${year ? `?year=${year}` : ''}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  uploadReceipt: (id, file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post(`/expenses/${id}/receipt`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getReceiptUrl: (id) => `${api.defaults.baseURL}/expenses/${id}/receipt`,
 };
 
 export const alertsApi = {
@@ -59,10 +79,32 @@ export const approvalsApi = {
   rejectCommitment:  (id, reason) => api.put(`/approvals/commitments/${id}/reject`, { reason }),
   approveExpense:    (id)         => api.put(`/approvals/expenses/${id}/approve`),
   rejectExpense:     (id, reason) => api.put(`/approvals/expenses/${id}/reject`, { reason }),
+  bulkAction:        (data)       => api.post('/approvals/bulk', data),
+};
+
+export const revisionsApi = {
+  list:         ()           => api.get('/revisions/'),
+  pendingCount: ()           => api.get('/revisions/pending-count'),
+  create:       (data)       => api.post('/revisions/', data),
+  approve:      (id)         => api.put(`/revisions/${id}/approve`),
+  reject:       (id, reason) => api.put(`/revisions/${id}/reject`, { reason }),
+};
+
+export const reportsApi = {
+  downloadPdf: (year) =>
+    api.get('/reports/pdf', { params: { year }, responseType: 'blob' }),
+  yoy: (yearA, yearB) =>
+    api.get('/reports/yoy', { params: { year_a: yearA, year_b: yearB } }),
 };
 
 export const aiApi = {
   ask: (query) => api.get('/ai/ask', { params: { query } }),
+};
+
+export const schedulesApi = {
+  get:     ()     => api.get('/schedules/'),
+  update:  (data) => api.put('/schedules/', data),
+  sendNow: ()     => api.post('/schedules/send-now'),
 };
 
 export const authApi = {

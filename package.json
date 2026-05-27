@@ -1,7 +1,27 @@
 {
   "dependencies": {
     "axios": "^1.15.0",
+    "playwright": "^1.60.0",
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1"
-  }
+  },
+  "name": "simax-assure",
+  "version": "1.0.0",
+  "description": "Internal financial management platform for Simax. Tracks budgets, commitments, and expenses across departments, runs assurance rules on every expense submission, and routes spend through an approval workflow. Finance managers get an alert feed and an AI assistant for ad-hoc queries.",
+  "main": "screenshot_demo.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshitg-14/Simax-Assure.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/harshitg-14/Simax-Assure/issues"
+  },
+  "homepage": "https://github.com/harshitg-14/Simax-Assure#readme"
 }

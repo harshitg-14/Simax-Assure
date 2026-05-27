@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { approvalsApi } from '../api/services';
+import { approvalsApi, expensesApi } from '../api/services';
 import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 
@@ -23,6 +23,10 @@ function StatusPill({ status }) {
   );
 }
 
+const CB_STYLE = {
+  width: 15, height: 15, cursor: 'pointer', accentColor: 'var(--accent2)',
+};
+
 export default function Approvals() {
   const { isAdmin, isFinanceManager } = useAuth();
   const canApprove = isAdmin || isFinanceManager;
@@ -37,6 +41,13 @@ export default function Approvals() {
   const [rejectReason, setRejectReason] = useState('');
   const [toast, setToast]       = useState('');
 
+  // Bulk selection
+  const [selC, setSelC] = useState(new Set());
+  const [selE, setSelE] = useState(new Set());
+  const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
+  const [bulkRejectReason, setBulkRejectReason] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const load = useCallback(async () => {
@@ -49,6 +60,8 @@ export default function Approvals() {
       setSummary(s.data || { pending: 0, approved: 0, rejected: 0 });
       setPending(p.data || { commitments: [], expenses: [] });
       setHistory(h.data || { commitments: [], expenses: [] });
+      setSelC(new Set());
+      setSelE(new Set());
     } finally {
       setLoading(false);
     }
@@ -70,10 +83,7 @@ export default function Approvals() {
     }
   };
 
-  const startReject = (type, id) => {
-    setRejectItem({ type, id });
-    setRejectReason('');
-  };
+  const startReject = (type, id) => { setRejectItem({ type, id }); setRejectReason(''); };
 
   const confirmReject = async () => {
     if (!rejectItem) return;
@@ -93,15 +103,61 @@ export default function Approvals() {
     }
   };
 
+  // Bulk helpers
+  const toggleC = (id) => setSelC(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleE = (id) => setSelE(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAllC = () => setSelC(s => s.size === pending.commitments.length ? new Set() : new Set(pending.commitments.map(c => c.id)));
+  const toggleAllE = () => setSelE(s => s.size === pending.expenses.length    ? new Set() : new Set(pending.expenses.map(e => e.id)));
+
+  const bulkApprove = async () => {
+    if (selC.size + selE.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const r = await approvalsApi.bulkAction({
+        action: 'approve',
+        commitment_ids: [...selC],
+        expense_ids: [...selE],
+      });
+      showToast(r.data.detail);
+      load();
+    } catch (e) {
+      showToast(e.response?.data?.detail || 'Bulk approve failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkReject = async () => {
+    setBulkBusy(true);
+    try {
+      const r = await approvalsApi.bulkAction({
+        action: 'reject',
+        commitment_ids: [...selC],
+        expense_ids: [...selE],
+        reason: bulkRejectReason,
+      });
+      showToast(r.data.detail);
+      setBulkRejectOpen(false);
+      setBulkRejectReason('');
+      load();
+    } catch (e) {
+      showToast(e.response?.data?.detail || 'Bulk reject failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
 
-  const pendingTotal   = pending.commitments.length + pending.expenses.length;
-  const historyAll     = [
+  const pendingTotal = pending.commitments.length + pending.expenses.length;
+  const selectedTotal = selC.size + selE.size;
+  const historyAll = [
     ...history.commitments,
     ...history.expenses,
   ].sort((a, b) => (b.approved_at || '').localeCompare(a.approved_at || ''));
 
   return (
+    <>
     <div className="page fade-in">
 
       {/* Header */}
@@ -146,6 +202,43 @@ export default function Approvals() {
         ))}
       </div>
 
+      {/* Bulk action bar */}
+      {tab === 'pending' && canApprove && selectedTotal > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: 'var(--surface)', border: '1px solid var(--accent2)',
+          borderRadius: 8, padding: '10px 16px', marginBottom: 16,
+          boxShadow: '0 2px 12px rgba(201,151,10,0.15)',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent2)', flex: 1 }}>
+            {selectedTotal} item{selectedTotal > 1 ? 's' : ''} selected
+          </span>
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: 12, padding: '5px 16px' }}
+            disabled={bulkBusy}
+            onClick={bulkApprove}
+          >
+            {bulkBusy ? 'Processing...' : `Approve All (${selectedTotal})`}
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 12, padding: '5px 16px', color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }}
+            disabled={bulkBusy}
+            onClick={() => { setBulkRejectOpen(true); setBulkRejectReason(''); }}
+          >
+            Reject All ({selectedTotal})
+          </button>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: 11, padding: '4px 10px' }}
+            onClick={() => { setSelC(new Set()); setSelE(new Set()); }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Pending tab */}
       {tab === 'pending' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -167,6 +260,13 @@ export default function Approvals() {
                 <table>
                   <thead>
                     <tr>
+                      {canApprove && (
+                        <th style={{ width: 36 }}>
+                          <input type="checkbox" style={CB_STYLE}
+                            checked={selC.size === pending.commitments.length && pending.commitments.length > 0}
+                            onChange={toggleAllC} />
+                        </th>
+                      )}
                       <th>Ref</th>
                       <th>Description</th>
                       <th>Department</th>
@@ -180,7 +280,13 @@ export default function Approvals() {
                   <tbody>
                     {pending.commitments.map(c => (
                       <>
-                        <tr key={c.id}>
+                        <tr key={c.id} style={{ background: selC.has(c.id) ? 'rgba(201,151,10,0.05)' : undefined }}>
+                          {canApprove && (
+                            <td>
+                              <input type="checkbox" style={CB_STYLE}
+                                checked={selC.has(c.id)} onChange={() => toggleC(c.id)} />
+                            </td>
+                          )}
                           <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{c.ref}</td>
                           <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>
                             {c.description}
@@ -194,19 +300,15 @@ export default function Approvals() {
                             <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                               {rejectItem?.type === 'commitment' && rejectItem?.id === c.id ? null : (
                                 <>
-                                  <button
-                                    className="btn btn-primary"
+                                  <button className="btn btn-primary"
                                     style={{ padding: '3px 12px', fontSize: 11, marginRight: 6 }}
                                     disabled={busy === `commitment-${c.id}`}
-                                    onClick={() => approve('commitment', c.id)}
-                                  >
+                                    onClick={() => approve('commitment', c.id)}>
                                     Approve
                                   </button>
-                                  <button
-                                    className="btn btn-ghost"
+                                  <button className="btn btn-ghost"
                                     style={{ padding: '3px 12px', fontSize: 11, color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }}
-                                    onClick={() => startReject('commitment', c.id)}
-                                  >
+                                    onClick={() => startReject('commitment', c.id)}>
                                     Reject
                                   </button>
                                 </>
@@ -216,29 +318,22 @@ export default function Approvals() {
                         </tr>
                         {rejectItem?.type === 'commitment' && rejectItem?.id === c.id && (
                           <tr key={`rej-${c.id}`}>
-                            <td colSpan={canApprove ? 8 : 7} style={{ background: 'rgba(220,38,38,0.04)', padding: '12px 14px' }}>
+                            <td colSpan={canApprove ? 9 : 7} style={{ background: 'rgba(220,38,38,0.04)', padding: '12px 14px' }}>
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                <textarea
-                                  rows={2}
-                                  placeholder="Reason for rejection (optional)"
-                                  value={rejectReason}
-                                  onChange={e => setRejectReason(e.target.value)}
+                                <textarea rows={2} placeholder="Reason for rejection (optional)"
+                                  value={rejectReason} onChange={e => setRejectReason(e.target.value)}
                                   style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border2)',
                                     borderRadius: 5, color: 'var(--text)', fontSize: 12, padding: '7px 10px',
-                                    resize: 'none', fontFamily: 'var(--sans)', outline: 'none' }}
-                                />
+                                    resize: 'none', fontFamily: 'var(--sans)', outline: 'none' }} />
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                   <button className="btn btn-ghost"
                                     style={{ fontSize: 11, padding: '4px 14px', color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }}
-                                    disabled={busy === `commitment-${c.id}`}
-                                    onClick={confirmReject}>
+                                    disabled={busy === `commitment-${c.id}`} onClick={confirmReject}>
                                     {busy === `commitment-${c.id}` ? 'Rejecting...' : 'Confirm Reject'}
                                   </button>
                                   <button className="btn btn-ghost"
                                     style={{ fontSize: 11, padding: '4px 14px' }}
-                                    onClick={() => setRejectItem(null)}>
-                                    Cancel
-                                  </button>
+                                    onClick={() => setRejectItem(null)}>Cancel</button>
                                 </div>
                               </div>
                             </td>
@@ -269,6 +364,13 @@ export default function Approvals() {
                 <table>
                   <thead>
                     <tr>
+                      {canApprove && (
+                        <th style={{ width: 36 }}>
+                          <input type="checkbox" style={CB_STYLE}
+                            checked={selE.size === pending.expenses.length && pending.expenses.length > 0}
+                            onChange={toggleAllE} />
+                        </th>
+                      )}
                       <th>Ref</th>
                       <th>Vendor</th>
                       <th>Category</th>
@@ -276,13 +378,20 @@ export default function Approvals() {
                       <th style={{ textAlign: 'right' }}>Amount</th>
                       <th>Date</th>
                       <th>Submitted By</th>
+                      <th>Receipt</th>
                       {canApprove && <th style={{ textAlign: 'center' }}>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {pending.expenses.map(e => (
                       <>
-                        <tr key={e.id}>
+                        <tr key={e.id} style={{ background: selE.has(e.id) ? 'rgba(201,151,10,0.05)' : undefined }}>
+                          {canApprove && (
+                            <td>
+                              <input type="checkbox" style={CB_STYLE}
+                                checked={selE.has(e.id)} onChange={() => toggleE(e.id)} />
+                            </td>
+                          )}
                           <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{e.ref}</td>
                           <td style={{ fontWeight: 500 }}>{e.vendor || '—'}</td>
                           <td style={{ color: 'var(--text2)', fontSize: 12 }}>{e.category || '—'}</td>
@@ -290,23 +399,28 @@ export default function Approvals() {
                           <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontWeight: 600 }}>{fmt(e.amount)}</td>
                           <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{e.date}</td>
                           <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>{e.submitted_by || '—'}</td>
+                          <td>
+                            {e.has_receipt ? (
+                              <a href={expensesApi.getReceiptUrl(e.id)} target="_blank" rel="noreferrer"
+                                style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none',
+                                  fontFamily: 'var(--mono)', fontWeight: 600 }}>View</a>
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>
+                            )}
+                          </td>
                           {canApprove && (
                             <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                               {rejectItem?.type === 'expense' && rejectItem?.id === e.id ? null : (
                                 <>
-                                  <button
-                                    className="btn btn-primary"
+                                  <button className="btn btn-primary"
                                     style={{ padding: '3px 12px', fontSize: 11, marginRight: 6 }}
                                     disabled={busy === `expense-${e.id}`}
-                                    onClick={() => approve('expense', e.id)}
-                                  >
+                                    onClick={() => approve('expense', e.id)}>
                                     Approve
                                   </button>
-                                  <button
-                                    className="btn btn-ghost"
+                                  <button className="btn btn-ghost"
                                     style={{ padding: '3px 12px', fontSize: 11, color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }}
-                                    onClick={() => startReject('expense', e.id)}
-                                  >
+                                    onClick={() => startReject('expense', e.id)}>
                                     Reject
                                   </button>
                                 </>
@@ -316,29 +430,22 @@ export default function Approvals() {
                         </tr>
                         {rejectItem?.type === 'expense' && rejectItem?.id === e.id && (
                           <tr key={`rej-${e.id}`}>
-                            <td colSpan={canApprove ? 8 : 7} style={{ background: 'rgba(220,38,38,0.04)', padding: '12px 14px' }}>
+                            <td colSpan={canApprove ? 10 : 8} style={{ background: 'rgba(220,38,38,0.04)', padding: '12px 14px' }}>
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                <textarea
-                                  rows={2}
-                                  placeholder="Reason for rejection (optional)"
-                                  value={rejectReason}
-                                  onChange={ev => setRejectReason(ev.target.value)}
+                                <textarea rows={2} placeholder="Reason for rejection (optional)"
+                                  value={rejectReason} onChange={ev => setRejectReason(ev.target.value)}
                                   style={{ flex: 1, background: 'var(--surface2)', border: '1px solid var(--border2)',
                                     borderRadius: 5, color: 'var(--text)', fontSize: 12, padding: '7px 10px',
-                                    resize: 'none', fontFamily: 'var(--sans)', outline: 'none' }}
-                                />
+                                    resize: 'none', fontFamily: 'var(--sans)', outline: 'none' }} />
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                   <button className="btn btn-ghost"
                                     style={{ fontSize: 11, padding: '4px 14px', color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }}
-                                    disabled={busy === `expense-${e.id}`}
-                                    onClick={confirmReject}>
+                                    disabled={busy === `expense-${e.id}`} onClick={confirmReject}>
                                     {busy === `expense-${e.id}` ? 'Rejecting...' : 'Confirm Reject'}
                                   </button>
                                   <button className="btn btn-ghost"
                                     style={{ fontSize: 11, padding: '4px 14px' }}
-                                    onClick={() => setRejectItem(null)}>
-                                    Cancel
-                                  </button>
+                                    onClick={() => setRejectItem(null)}>Cancel</button>
                                 </div>
                               </div>
                             </td>
@@ -383,15 +490,9 @@ export default function Approvals() {
               <table>
                 <thead>
                   <tr>
-                    <th>Ref</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>Department</th>
+                    <th>Ref</th><th>Type</th><th>Description</th><th>Department</th>
                     <th style={{ textAlign: 'right' }}>Amount</th>
-                    <th>Status</th>
-                    <th>Action By</th>
-                    <th>Reason</th>
-                    <th>Date</th>
+                    <th>Status</th><th>Action By</th><th>Reason</th><th>Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -438,5 +539,43 @@ export default function Approvals() {
         </div>
       )}
     </div>
+
+    {/* Bulk reject modal */}
+    {bulkRejectOpen && (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 99999, backdropFilter: 'blur(3px)' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border2)',
+          borderRadius: 12, padding: 28, width: 400,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6)', animation: 'fadeUp 0.2s ease' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Bulk Reject</div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 20 }}>
+            Rejecting {selectedTotal} item{selectedTotal > 1 ? 's' : ''} — add a reason below
+          </div>
+          <textarea
+            rows={3}
+            placeholder="Reason for rejection (optional)"
+            value={bulkRejectReason}
+            onChange={e => setBulkRejectReason(e.target.value)}
+            style={{ width: '100%', background: 'var(--surface2)', border: '1px solid var(--border2)',
+              borderRadius: 6, color: 'var(--text)', fontSize: 12, padding: '9px 11px',
+              resize: 'vertical', fontFamily: 'var(--sans)', outline: 'none', marginBottom: 20,
+              boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost"
+              onClick={() => setBulkRejectOpen(false)} disabled={bulkBusy}>
+              Cancel
+            </button>
+            <button className="btn btn-ghost"
+              style={{ color: 'var(--danger)', borderColor: 'rgba(220,38,38,0.3)' }}
+              onClick={bulkReject} disabled={bulkBusy}>
+              {bulkBusy ? 'Rejecting...' : `Confirm Reject (${selectedTotal})`}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

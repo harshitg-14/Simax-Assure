@@ -1,8 +1,7 @@
-import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from app.db import get_db
 from app import models
@@ -77,6 +76,7 @@ def _serialize_expense(e, depts, budgets):
         "approved_at":      str(e.approved_at) if e.approved_at else None,
         "rejection_reason": e.rejection_reason,
         "created_at":       str(e.created_at)  if e.created_at  else None,
+        "has_receipt":      bool(e.receipt_path),
     }
 
 
@@ -128,7 +128,8 @@ def get_history(db: Session = Depends(get_db), _: models.User = Depends(get_curr
 
 
 @router.put("/commitments/{commitment_id}/approve")
-def approve_commitment(commitment_id: int, db: Session = Depends(get_db),
+def approve_commitment(commitment_id: int, background_tasks: BackgroundTasks,
+                       db: Session = Depends(get_db),
                        current_user: models.User = Depends(get_approver)):
     c = db.query(models.Commitment).filter(models.Commitment.commitment_id == commitment_id).first()
     if not c:
@@ -138,18 +139,23 @@ def approve_commitment(commitment_id: int, db: Session = Depends(get_db),
     c.status      = "approved"
     c.approved_by = current_user.username
     c.approved_at = datetime.utcnow()
+    dept_name = _dept_name(db, c.department_id)
+    db.add(models.AuditLog(action="approved", entity_type="commitment",
+        entity_ref=f"CMT-{str(c.commitment_id).zfill(3)}", entity_id=c.commitment_id,
+        actor=current_user.username, detail=c.description, amount=float(c.amount),
+        dept_name=dept_name))
     db.commit()
     if c.submitted_by:
         email = _user_email(db, c.submitted_by)
         if email:
-            asyncio.create_task(notify_commitment_approved(
-                email, c, _dept_name(db, c.department_id), current_user.username
-            ))
+            background_tasks.add_task(notify_commitment_approved,
+                email, c, dept_name, current_user.username)
     return {"detail": "Approved", "status": "approved"}
 
 
 @router.put("/commitments/{commitment_id}/reject")
-def reject_commitment(commitment_id: int, data: ActionRequest, db: Session = Depends(get_db),
+def reject_commitment(commitment_id: int, data: ActionRequest, background_tasks: BackgroundTasks,
+                      db: Session = Depends(get_db),
                       current_user: models.User = Depends(get_approver)):
     c = db.query(models.Commitment).filter(models.Commitment.commitment_id == commitment_id).first()
     if not c:
@@ -160,19 +166,23 @@ def reject_commitment(commitment_id: int, data: ActionRequest, db: Session = Dep
     c.approved_by      = current_user.username
     c.approved_at      = datetime.utcnow()
     c.rejection_reason = data.reason
+    dept_name = _dept_name(db, c.department_id)
+    db.add(models.AuditLog(action="rejected", entity_type="commitment",
+        entity_ref=f"CMT-{str(c.commitment_id).zfill(3)}", entity_id=c.commitment_id,
+        actor=current_user.username, detail=data.reason or c.description, amount=float(c.amount),
+        dept_name=dept_name))
     db.commit()
     if c.submitted_by:
         email = _user_email(db, c.submitted_by)
         if email:
-            asyncio.create_task(notify_commitment_rejected(
-                email, c, _dept_name(db, c.department_id),
-                current_user.username, data.reason
-            ))
+            background_tasks.add_task(notify_commitment_rejected,
+                email, c, dept_name, current_user.username, data.reason)
     return {"detail": "Rejected", "status": "rejected"}
 
 
 @router.put("/expenses/{expense_id}/approve")
-def approve_expense(expense_id: int, db: Session = Depends(get_db),
+def approve_expense(expense_id: int, background_tasks: BackgroundTasks,
+                    db: Session = Depends(get_db),
                     current_user: models.User = Depends(get_approver)):
     e = db.query(models.Expense).filter(models.Expense.expense_id == expense_id).first()
     if not e:
@@ -182,18 +192,23 @@ def approve_expense(expense_id: int, db: Session = Depends(get_db),
     e.status      = "approved"
     e.approved_by = current_user.username
     e.approved_at = datetime.utcnow()
+    dept_name = _dept_name(db, e.department_id)
+    db.add(models.AuditLog(action="approved", entity_type="expense",
+        entity_ref=f"EXP-{str(e.expense_id).zfill(4)}", entity_id=e.expense_id,
+        actor=current_user.username, detail=f"{e.vendor or ''} {e.category or ''}".strip(),
+        amount=float(e.amount), dept_name=dept_name))
     db.commit()
     if e.submitted_by:
         email = _user_email(db, e.submitted_by)
         if email:
-            asyncio.create_task(notify_expense_approved(
-                email, e, _dept_name(db, e.department_id), current_user.username
-            ))
+            background_tasks.add_task(notify_expense_approved,
+                email, e, dept_name, current_user.username)
     return {"detail": "Approved", "status": "approved"}
 
 
 @router.put("/expenses/{expense_id}/reject")
-def reject_expense(expense_id: int, data: ActionRequest, db: Session = Depends(get_db),
+def reject_expense(expense_id: int, data: ActionRequest, background_tasks: BackgroundTasks,
+                   db: Session = Depends(get_db),
                    current_user: models.User = Depends(get_approver)):
     e = db.query(models.Expense).filter(models.Expense.expense_id == expense_id).first()
     if not e:
@@ -204,12 +219,102 @@ def reject_expense(expense_id: int, data: ActionRequest, db: Session = Depends(g
     e.approved_by      = current_user.username
     e.approved_at      = datetime.utcnow()
     e.rejection_reason = data.reason
+    dept_name = _dept_name(db, e.department_id)
+    db.add(models.AuditLog(action="rejected", entity_type="expense",
+        entity_ref=f"EXP-{str(e.expense_id).zfill(4)}", entity_id=e.expense_id,
+        actor=current_user.username, detail=data.reason or e.vendor or "",
+        amount=float(e.amount), dept_name=dept_name))
     db.commit()
     if e.submitted_by:
         email = _user_email(db, e.submitted_by)
         if email:
-            asyncio.create_task(notify_expense_rejected(
-                email, e, _dept_name(db, e.department_id),
-                current_user.username, data.reason
-            ))
+            background_tasks.add_task(notify_expense_rejected,
+                email, e, dept_name, current_user.username, data.reason)
     return {"detail": "Rejected", "status": "rejected"}
+
+
+class BulkActionRequest(BaseModel):
+    action: str
+    commitment_ids: List[int] = []
+    expense_ids: List[int] = []
+    reason: Optional[str] = None
+
+
+@router.post("/bulk")
+def bulk_action(
+    body: BulkActionRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_approver),
+):
+    if body.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
+
+    now = datetime.utcnow()
+    status = "approved" if body.action == "approve" else "rejected"
+    audit_action = status
+    count = 0
+    depts = {d.department_id: d.department_name
+             for d in db.query(models.Department).all()}
+
+    for cid in body.commitment_ids:
+        c = db.query(models.Commitment).filter(
+            models.Commitment.commitment_id == cid,
+            models.Commitment.status == "pending"
+        ).first()
+        if not c:
+            continue
+        c.status = status
+        c.approved_by = current_user.username
+        c.approved_at = now
+        if body.action == "reject":
+            c.rejection_reason = body.reason
+        dept_name = depts.get(c.department_id, "Unknown")
+        db.add(models.AuditLog(
+            action=audit_action, entity_type="commitment",
+            entity_ref=f"CMT-{str(c.commitment_id).zfill(3)}", entity_id=c.commitment_id,
+            actor=current_user.username,
+            detail=body.reason or c.description if body.action == "reject" else c.description,
+            amount=float(c.amount), dept_name=dept_name,
+        ))
+        if c.submitted_by:
+            email = _user_email(db, c.submitted_by)
+            if email:
+                if body.action == "approve":
+                    background_tasks.add_task(notify_commitment_approved, email, c, dept_name, current_user.username)
+                else:
+                    background_tasks.add_task(notify_commitment_rejected, email, c, dept_name, current_user.username, body.reason)
+        count += 1
+
+    for eid in body.expense_ids:
+        e = db.query(models.Expense).filter(
+            models.Expense.expense_id == eid,
+            models.Expense.status == "pending"
+        ).first()
+        if not e:
+            continue
+        e.status = status
+        e.approved_by = current_user.username
+        e.approved_at = now
+        if body.action == "reject":
+            e.rejection_reason = body.reason
+        dept_name = depts.get(e.department_id, "Unknown")
+        db.add(models.AuditLog(
+            action=audit_action, entity_type="expense",
+            entity_ref=f"EXP-{str(e.expense_id).zfill(4)}", entity_id=e.expense_id,
+            actor=current_user.username,
+            detail=body.reason or f"{e.vendor or ''} {e.category or ''}".strip(),
+            amount=float(e.amount), dept_name=dept_name,
+        ))
+        if e.submitted_by:
+            email = _user_email(db, e.submitted_by)
+            if email:
+                if body.action == "approve":
+                    background_tasks.add_task(notify_expense_approved, email, e, dept_name, current_user.username)
+                else:
+                    background_tasks.add_task(notify_expense_rejected, email, e, dept_name, current_user.username, body.reason)
+        count += 1
+
+    db.commit()
+    word = "Approved" if body.action == "approve" else "Rejected"
+    return {"detail": f"{word} {count} item(s)", "count": count}

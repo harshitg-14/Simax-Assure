@@ -11,12 +11,14 @@ const NAV_ITEMS = [
   { to: '/expenditure', label: 'Expenditure',          section: 'Overview', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
   { to: '/assurance',   label: 'Assurance Monitor',    section: 'Control',  restrict: 'finance', badge: 'alerts', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> },
   { to: '/approvals',   label: 'Approvals',            section: 'Control',  restrict: 'finance', badge: 'approvals', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> },
+  { to: '/revisions',   label: 'Budget Revisions',     section: 'Control',  badge: 'revisions', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
   { to: '/reports',     label: 'Reports & Analytics',  section: 'Control',  restrict: 'finance', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+  { to: '/audit',       label: 'Audit Trail',          section: 'Control',  restrict: 'finance', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="12" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> },
   { to: '/departments', label: 'Departments',          section: 'Admin',    restrict: 'admin', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
   { to: '/users',       label: 'User Management',      section: 'Admin',    restrict: 'admin', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
 ];
 
-export default function Sidebar({ alertCount = 0, pendingApprovals = 0 }) {
+export default function Sidebar({ alertCount = 0, pendingApprovals = 0, pendingRevisions = 0 }) {
   const { user, logout, isAdmin, isFinanceManager, selectedYear, changeYear } = useAuth();
   const navigate = useNavigate();
   const [fyOpen, setFyOpen]     = useState(false);
@@ -82,6 +84,7 @@ export default function Sidebar({ alertCount = 0, pendingApprovals = 0 }) {
                   <span className="nav-label-text">{item.label}</span>
                   {item.badge === 'alerts'    && alertCount > 0        && <span className="nav-badge">{alertCount}</span>}
                   {item.badge === 'approvals' && pendingApprovals > 0   && <span className="nav-badge">{pendingApprovals}</span>}
+                  {item.badge === 'revisions' && pendingRevisions > 0   && <span className="nav-badge">{pendingRevisions}</span>}
                 </NavLink>
               ))}
             </div>

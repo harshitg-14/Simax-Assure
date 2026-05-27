@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { alertsApi, departmentsApi, approvalsApi } from './api/services';
+import { alertsApi, departmentsApi, approvalsApi, revisionsApi } from './api/services';
 
 import Sidebar          from './components/Sidebar';
 import Topbar           from './components/Topbar';
@@ -17,14 +17,17 @@ import Assurance   from './pages/Assurance';
 import Reports     from './pages/Reports';
 import Departments from './pages/Departments';
 import Users       from './pages/Users';
-import Approvals   from './pages/Approvals';
-import Login       from './pages/Login';
+import Approvals        from './pages/Approvals';
+import BudgetRevisions  from './pages/BudgetRevisions';
+import AuditLog         from './pages/AuditLog';
+import Login            from './pages/Login';
 
 function AppLayout() {
   const { isAuthenticated, authChecked } = useAuth();
   const [alertCount, setAlertCount]         = useState(0);
   const [openAlerts, setOpenAlerts]         = useState([]);
-  const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [pendingApprovals,  setPendingApprovals]  = useState(0);
+  const [pendingRevisions,  setPendingRevisions]  = useState(0);
   const [depts, setDepts]                   = useState([]);
   const [showModal, setShowModal]           = useState(false);
   const [toast, setToast]                   = useState('');
@@ -45,14 +48,22 @@ function AppLayout() {
       .catch(() => {});
   }, []);
 
+  const refreshRevisions = useCallback(() => {
+    revisionsApi.pendingCount()
+      .then(r => setPendingRevisions(r.data?.count || 0))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     refreshAlerts();
     refreshApprovals();
+    refreshRevisions();
     departmentsApi.list().then(r => setDepts(r.data || [])).catch(() => {});
     const id1 = setInterval(refreshAlerts,    60000);
     const id2 = setInterval(refreshApprovals, 60000);
-    return () => { clearInterval(id1); clearInterval(id2); };
+    const id3 = setInterval(refreshRevisions, 60000);
+    return () => { clearInterval(id1); clearInterval(id2); clearInterval(id3); };
   }, [isAuthenticated, refreshAlerts, refreshApprovals]);
 
   const handleSuccess = (msg) => {
@@ -75,7 +86,7 @@ function AppLayout() {
   return (
     <>
       <div style={{ display: 'flex', minHeight: '100vh' }}>
-        <Sidebar alertCount={alertCount} pendingApprovals={pendingApprovals} />
+        <Sidebar alertCount={alertCount} pendingApprovals={pendingApprovals} pendingRevisions={pendingRevisions} />
         <div style={{ marginLeft: 240, flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
           <Topbar onNewEntry={() => setShowModal(true)} alertCount={alertCount} openAlerts={openAlerts} />
           <div style={{ flex: 1 }}>
@@ -89,6 +100,8 @@ function AppLayout() {
               <Route path="/departments" element={<Departments />} />
               <Route path="/users"       element={<Users />} />
               <Route path="/approvals"   element={<Approvals />} />
+              <Route path="/revisions"   element={<BudgetRevisions />} />
+              <Route path="/audit"       element={<AuditLog />} />
               <Route path="*"            element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>

@@ -28,7 +28,7 @@ def _already_alerted(db, budget_id: int, alert_type: str) -> bool:
 
 def _call_gemini(context: str) -> dict:
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash-lite",
         contents=context
     )
     text = response.text.strip()
@@ -63,8 +63,10 @@ def generate_ai_alert(db, expense):
         )
         allocated = float(budget.allocated_budget)
 
-        # ── Guard: only proceed if budget is actually exceeded ──
+        # ── Guard: only proceed if overrun exceeds 5% (avoid noise on tiny overruns) ──
         if total_expense <= allocated:
+            return None
+        if ((total_expense - allocated) / allocated * 100) < 5:
             return None
 
         # ── Dedup: skip if same alert already created today ─────
@@ -139,8 +141,10 @@ def generate_predictive_alert(db, expense):
         avg_daily   = total_month / days_passed
         projected   = avg_daily * 30
 
-        # ── Guard: only proceed if projection actually exceeds budget ──
+        # ── Guard: only proceed if projection exceeds budget by >10% ──
         if projected <= allocated:
+            return None
+        if ((projected - allocated) / allocated * 100) < 10:
             return None
 
         # ── Dedup: skip if same alert already created today ───────────

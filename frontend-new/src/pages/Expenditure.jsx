@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { expensesApi, departmentsApi, budgetsApi, commitmentsApi } from '../api/services';
 import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
@@ -34,6 +34,11 @@ export default function Expenditure() {
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
   const [filterDept, setFilterDept]   = useState('');
+  const [importOpen,    setImportOpen]    = useState(false);
+  const [importFile,    setImportFile]    = useState(null);
+  const [importResult,  setImportResult]  = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const importRef = useRef();
   const [form, setForm] = useState({
     department_id: isDeptHead && userDeptId ? String(userDeptId) : '',
     budget_id: '', commitment_id: '',
@@ -86,6 +91,25 @@ export default function Expenditure() {
   };
 
   const getDeptName = (id) => depts.find(d => d.department_id === id)?.department_name || '—';
+
+  const downloadTemplate = () => {
+    const csv = 'department,vendor,amount,category,expense_date\nMarketing,Acme Ltd,50000,Digital Marketing,2026-05-01\nIT,AWS,120000,Cloud Infrastructure,2026-05-15\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'expense_import_template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const runImport = async () => {
+    if (!importFile) return;
+    setImportLoading(true); setImportResult(null);
+    try {
+      const res = await expensesApi.bulkImport(importFile);
+      setImportResult(res.data);
+      if (res.data.imported > 0) load();
+    } catch (e) {
+      setImportResult({ error: e.response?.data?.detail || 'Import failed' });
+    } finally { setImportLoading(false); }
+  };
   const totalSpent  = expenses.reduce((a, e) => a + +(e.amount || 0), 0);
 
   const exportCSV = () => {
@@ -112,6 +136,7 @@ export default function Expenditure() {
   if (loading) return <div className="page-loading"><div className="spinner" /></div>;
 
   return (
+    <>
     <div className="page fade-in">
       <div className="ph">
         <div>
@@ -119,6 +144,7 @@ export default function Expenditure() {
           <div className="ph-sub">Actual expenses recorded across all departments</div>
         </div>
         <div className="ph-actions">
+          <button className="btn btn-ghost" onClick={() => { setImportOpen(true); setImportFile(null); setImportResult(null); }}>Import CSV</button>
           <button className="btn btn-ghost" onClick={exportCSV} disabled={expenses.length === 0}>Export CSV</button>
         </div>
       </div>
@@ -275,5 +301,67 @@ export default function Expenditure() {
         </div>
       </div>
     </div>
+
+    {importOpen && (
+      <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:99999,backdropFilter:'blur(4px)' }}>
+        <div style={{ background:'var(--surface)',border:'1px solid var(--border2)',borderRadius:14,padding:32,width:480,boxShadow:'0 24px 64px rgba(0,0,0,0.6)',animation:'fadeUp 0.2s ease' }}>
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20 }}>
+            <div>
+              <div style={{ fontSize:15,fontWeight:700 }}>Bulk Import Expenses</div>
+              <div style={{ fontSize:12,color:'var(--text3)',marginTop:3 }}>Upload a CSV file to add multiple expenses at once</div>
+            </div>
+            <button className="btn btn-ghost" style={{ padding:'4px 10px',fontSize:12 }} onClick={() => setImportOpen(false)}>&#x2715;</button>
+          </div>
+
+          <div style={{ background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:18,fontSize:12,color:'var(--text2)' }}>
+            <div style={{ fontWeight:600,marginBottom:6 }}>Required CSV columns:</div>
+            <div style={{ fontFamily:'var(--mono)',fontSize:11,color:'var(--text3)',lineHeight:1.8 }}>
+              department &nbsp;·&nbsp; vendor &nbsp;·&nbsp; amount &nbsp;·&nbsp; category &nbsp;·&nbsp; expense_date (YYYY-MM-DD)
+            </div>
+            <button className="btn btn-ghost" style={{ marginTop:10,fontSize:11,padding:'4px 12px' }} onClick={downloadTemplate}>
+              Download Template
+            </button>
+          </div>
+
+          <div
+            onClick={() => importRef.current?.click()}
+            style={{ border:`2px dashed ${importFile ? 'var(--success)' : 'var(--border2)'}`,borderRadius:8,padding:'20px',textAlign:'center',cursor:'pointer',marginBottom:18,transition:'border-color 0.2s' }}
+          >
+            <input ref={importRef} type="file" accept=".csv" style={{ display:'none' }}
+              onChange={e => { setImportFile(e.target.files[0] || null); setImportResult(null); }} />
+            {importFile
+              ? <div style={{ fontSize:13,color:'var(--success)',fontWeight:600 }}>&#x2713; {importFile.name}</div>
+              : <div style={{ fontSize:12,color:'var(--text3)' }}>Click to select a CSV file</div>}
+          </div>
+
+          {importResult && !importResult.error && (
+            <div style={{ marginBottom:16,fontSize:12 }}>
+              <div style={{ display:'flex',gap:16,marginBottom:8 }}>
+                <span style={{ color:'var(--success)',fontWeight:700 }}>&#x2713; {importResult.imported} imported</span>
+                {importResult.failed?.length > 0 && <span style={{ color:'var(--danger)',fontWeight:700 }}>&#x2715; {importResult.failed.length} failed</span>}
+              </div>
+              {importResult.failed?.length > 0 && (
+                <div style={{ background:'rgba(220,38,38,0.06)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:6,padding:'8px 12px',maxHeight:120,overflowY:'auto' }}>
+                  {importResult.failed.map((f,i) => (
+                    <div key={i} style={{ fontSize:11,fontFamily:'var(--mono)',color:'var(--danger)',marginBottom:2 }}>Row {f.row}: {f.reason}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {importResult?.error && (
+            <div style={{ marginBottom:16,fontSize:12,color:'var(--danger)',padding:'8px 12px',background:'rgba(220,38,38,0.06)',borderRadius:6,border:'1px solid rgba(220,38,38,0.2)' }}>{importResult.error}</div>
+          )}
+
+          <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
+            <button className="btn btn-ghost" onClick={() => setImportOpen(false)}>Close</button>
+            <button className="btn btn-primary" onClick={runImport} disabled={!importFile || importLoading}>
+              {importLoading ? 'Importing...' : 'Import'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

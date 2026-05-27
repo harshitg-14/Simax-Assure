@@ -1,10 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { budgetsApi, alertsApi, expensesApi, dashboardApi } from '../api/services';
+import { budgetsApi, alertsApi, expensesApi, dashboardApi, reportsApi } from '../api/services';
 import { useAuth } from '../context/AuthContext';
 import KpiCard from '../components/KpiCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 import './Dashboard.css';
+
+const FORECAST_COLOR = { overrun: 'var(--danger)', critical: 'var(--danger)', at_risk: 'var(--warn)', on_track: 'var(--success)' };
+const FORECAST_BG    = { overrun: 'rgba(220,38,38,0.1)', critical: 'rgba(220,38,38,0.08)', at_risk: 'rgba(217,119,6,0.1)', on_track: 'rgba(5,150,105,0.1)' };
+const FORECAST_LABEL = { overrun: 'OVERRUN', critical: 'CRITICAL', at_risk: 'AT RISK', on_track: 'ON TRACK' };
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+};
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmt    = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -48,7 +57,9 @@ export default function Dashboard() {
   const [alertSummary, setAlertSummary] = useState(null);
   const [deptRisk, setDeptRisk]     = useState([]);
   const [anomalies, setAnomalies]   = useState([]);
+  const [forecast, setForecast]     = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -58,13 +69,15 @@ export default function Dashboard() {
       expensesApi.list(),
       dashboardApi.alertsSummary(),
       dashboardApi.departmentRisk(),
-    ]).then(([k, a, e, s, r]) => {
+      dashboardApi.forecast(selectedYear),
+    ]).then(([k, a, e, s, r, f]) => {
       const kpiData = k.data;
       setKpis(kpiData);
       setAlerts((a.data || []).slice(0, 5));
       setExpenses(e.data || []);
       setAlertSummary(s.data || null);
       setDeptRisk(r.data || []);
+      setForecast(f.data || []);
       const budgetIds = (kpiData?.departments || []).map(d => d.budget_id).filter(Boolean);
       Promise.all(budgetIds.map(id => dashboardApi.anomalies(id).then(r => r.data || []).catch(() => [])))
         .then(results => setAnomalies(results.flat()));
@@ -88,8 +101,7 @@ export default function Dashboard() {
     Spent:  d.spent_amount     || 0,
   }));
 
-  // Accurate counts from the dedicated summary endpoint (all alerts, not just 5)
-  const exportReport = () => {
+  const exportCSV = () => {
     const headers = ['Department', 'Allocated (INR)', 'Committed (INR)', 'Spent (INR)', 'Remaining (INR)', 'Utilization %'];
     const rows = departments.map(d => [
       d.department_name,
@@ -109,6 +121,23 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const exportPDF = async () => {
+    setPdfLoading(true);
+    try {
+      const res = await reportsApi.downloadPdf(selectedYear);
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = `simax-assure-fy${selectedYear}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const openCount     = kpis?.active_alerts         || 0;
   const criticalCount = alertSummary?.critical       || 0;
   const highCount     = alertSummary?.high           || 0;
@@ -123,7 +152,10 @@ export default function Dashboard() {
           <div className="ph-sub">FY {selectedYear} &nbsp;&middot;&nbsp; All Departments</div>
         </div>
         <div className="ph-actions">
-          <button className="btn btn-ghost" onClick={exportReport} disabled={departments.length === 0}>Export Report</button>
+          <button className="btn btn-ghost" onClick={exportCSV} disabled={departments.length === 0}>Export CSV</button>
+          <button className="btn btn-primary" onClick={exportPDF} disabled={pdfLoading || departments.length === 0}>
+            {pdfLoading ? 'Generating PDF...' : 'Export PDF'}
+          </button>
         </div>
       </div>
 
@@ -326,6 +358,60 @@ export default function Dashboard() {
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)' }}>{a.reason?.replace(/_/g, ' ')}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Burn-Rate Forecast */}
+      {forecast.length > 0 && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-head">
+            <div className="card-title">Budget Burn-Rate Forecast</div>
+            <span className="chip chip-warn">
+              {forecast.filter(f => f.status === 'overrun' || f.status === 'critical').length} At Risk
+            </span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th style={{ textAlign: 'right' }}>Allocated</th>
+                  <th style={{ textAlign: 'right' }}>Spent</th>
+                  <th style={{ textAlign: 'right' }}>Monthly Burn</th>
+                  <th style={{ textAlign: 'center' }}>Months Left</th>
+                  <th style={{ textAlign: 'center' }}>Projected Exhaustion</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecast.map((f, i) => {
+                  const fc = FORECAST_COLOR[f.status] || 'var(--text3)';
+                  return (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 600 }}>{f.department}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmt(f.allocated)}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--warn)' }}>{fmt(f.spent)}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', color: fc }}>{fmt(f.monthly_burn)}/mo</td>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--mono)', fontWeight: 700, color: fc }}>
+                        {f.months_to_exhaust != null ? `${f.months_to_exhaust}` : f.status === 'overrun' ? '—' : '12+'}
+                      </td>
+                      <td style={{ textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 12, color: fc }}>
+                        {f.status === 'overrun' ? 'Already over' : fmtDate(f.projected_exhaustion)}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                          fontFamily: 'var(--mono)', background: FORECAST_BG[f.status], color: fc,
+                        }}>
+                          {FORECAST_LABEL[f.status] || f.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

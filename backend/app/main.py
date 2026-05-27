@@ -21,7 +21,12 @@ from app.routes import (
     users,
     approvals,
     slm,
+    reports,
+    revisions,
+    schedules,
+    audit,
 )
+from app.services.scheduler_service import start_scheduler, stop_scheduler
 
 app = FastAPI(title="Simax Assure API")
 
@@ -41,6 +46,7 @@ def migrate_db():
         ("expenses",    "approved_by",      "VARCHAR(100)", "NULL"),
         ("expenses",    "approved_at",      "TIMESTAMP",    "NULL"),
         ("expenses",    "rejection_reason", "TEXT",         "NULL"),
+        ("expenses",    "receipt_path",     "VARCHAR(500)", "NULL"),
         ("users",       "department_id",    "INTEGER",      "NULL"),
     ]
     with engine.connect() as conn:
@@ -73,6 +79,20 @@ app.include_router(alerts.router)
 app.include_router(ai.router)
 app.include_router(approvals.router)
 app.include_router(slm.router)
+app.include_router(reports.router)
+app.include_router(revisions.router)
+app.include_router(schedules.router)
+app.include_router(audit.router)
+
+
+@app.on_event("startup")
+def on_startup():
+    start_scheduler(SessionLocal)
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    stop_scheduler()
 
 
 DEFAULT_USERS = [

@@ -1,4 +1,6 @@
+import os
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
@@ -7,7 +9,9 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app import models
 
-SECRET_KEY = "simax-assure-jwt-secret-change-in-production"
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "simax-assure-fallback-secret-please-set-in-env")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 8
 

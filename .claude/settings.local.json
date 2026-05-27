@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat -ano)",
+      "Bash(findstr :11434)",
+      "Bash(curl -s http://127.0.0.1:11434/api/tags)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s \"http://localhost:8000/slm/status\")",
+      "Bash(curl -s \"http://localhost:8000/slm/query?query=What+is+the+total+budget+and+how+much+have+we+spent\" --max-time 130)",
+      "Bash(curl -s \"http://localhost:8000/slm/query?query=Which+department+has+spent+the+most\" --max-time 130)",
+      "Bash(curl -s \"http://localhost:8000/slm/query?query=Who+are+our+top+vendors+and+how+much+have+we+paid+them\" --max-time 130)",
+      "Bash(curl -s \"http://localhost:8000/slm/query?query=Are+we+at+risk+of+exceeding+our+budget\" --max-time 130)",
+      "Bash(curl -s \"http://localhost:8000/slm/query?query=How+much+budget+is+remaining\" --max-time 130)",
+      "Bash(curl -s \"http://localhost:8000/slm/query?query=Give+me+a+full+financial+health+report\" --max-time 130)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\thulasiram.r_simaxsy\\\\Desktop\\\\Simax-Assure\\\\\" | Where-Object {$_.Extension -eq \".docx\"} | Select-Object Name, @{N=\"Size\\(KB\\)\";E={[math]::Round\\($_.Length/1KB,1\\)}})",
+      "Bash(npm start *)"
+    ]
+  }
+}

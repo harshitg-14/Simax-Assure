@@ -231,6 +231,59 @@ async def notify_commitment_rejected(to_email: str, commitment, dept_name: str, 
     await _send([to_email], f"[Simax Assure] Commitment Rejected — {_fmt(commitment.amount)}", html)
 
 
+async def notify_revision_submitted(finance_emails: list[str], revision, dept_name: str, submitted_by: str):
+    diff = float(revision.requested_amount) - float(revision.current_amount)
+    html = _html(
+        title="Budget Revision Request — Pending Review",
+        color="#c9970a",
+        rows=[
+            ("Reference",        f"REV-{str(revision.revision_id).zfill(3)}"),
+            ("Department",       dept_name),
+            ("Current Budget",   _fmt(revision.current_amount)),
+            ("Requested Budget", _fmt(revision.requested_amount)),
+            ("Increase",         f"+{_fmt(diff)}" if diff >= 0 else _fmt(diff)),
+            ("Reason",           revision.reason or "—"),
+            ("Requested By",     submitted_by),
+            ("Status",           "Pending Review"),
+        ],
+        note="Please log in to Simax Assure to review and action this budget revision request."
+    )
+    await _send(finance_emails, f"[Simax Assure] Budget Revision Request — {dept_name}", html)
+
+
+async def notify_revision_approved(to_email: str, revision, dept_name: str, approved_by: str):
+    html = _html(
+        title="Your Budget Revision Has Been Approved",
+        color="#059669",
+        rows=[
+            ("Reference",        f"REV-{str(revision.revision_id).zfill(3)}"),
+            ("Department",       dept_name),
+            ("New Budget",       _fmt(revision.requested_amount)),
+            ("Approved By",      approved_by),
+            ("Status",           "Approved"),
+        ],
+        note="Your department budget has been updated to the new amount."
+    )
+    await _send([to_email], f"[Simax Assure] Budget Revision Approved — {dept_name}", html)
+
+
+async def notify_revision_rejected(to_email: str, revision, dept_name: str, rejected_by: str, reason: str):
+    html = _html(
+        title="Your Budget Revision Has Been Rejected",
+        color="#dc2626",
+        rows=[
+            ("Reference",        f"REV-{str(revision.revision_id).zfill(3)}"),
+            ("Department",       dept_name),
+            ("Requested Budget", _fmt(revision.requested_amount)),
+            ("Rejected By",      rejected_by),
+            ("Reason",           reason or "No reason provided"),
+            ("Status",           "Rejected"),
+        ],
+        note="Please contact your finance manager if you have questions."
+    )
+    await _send([to_email], f"[Simax Assure] Budget Revision Rejected — {dept_name}", html)
+
+
 async def notify_budget_alert(finance_emails: list[str], dept_name: str, total_spent: float,
                                allocated: float, overrun_pct: float, severity: str):
     color = "#dc2626" if severity == "critical" else "#d97706" if severity == "high" else "#c9970a"

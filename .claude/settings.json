@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Process -Name \"python\", \"node\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match \"uvicorn|react-scripts\" } | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host \"Killed existing processes\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000, 3000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }; Write-Host \"Cleared ports 8000 and 3000\")",
+      "PowerShell(Start-Sleep -Seconds 6; try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/health\" -UseBasicParsing; \"Backend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Backend: not up yet\" })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing; \"Frontend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Frontend: not up yet\" })"
+    ]
+  }
+}

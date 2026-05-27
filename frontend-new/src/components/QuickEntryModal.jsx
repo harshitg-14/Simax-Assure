@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { expensesApi, commitmentsApi, budgetsApi, departmentsApi } from '../api/services';
 import './QuickEntryModal.css';
 
@@ -20,6 +20,8 @@ export default function QuickEntryModal({ onClose, onSuccess }) {
     department_id: '', budget_id: '', commitment_id: '',
     vendor: '', amount: '', category: 'Cloud Infrastructure',
   });
+  const [receipt, setReceipt]   = useState(null);
+  const fileInputRef            = useRef(null);
   const [comForm, setComForm] = useState({
     department_id: '', budget_id: '', description: '', amount: '',
   });
@@ -45,13 +47,16 @@ export default function QuickEntryModal({ onClose, onSuccess }) {
     setLoading(true); setError('');
     try {
       if (tab === 0) {
-        await expensesApi.create({
+        const res = await expensesApi.create({
           ...expForm,
           department_id: +expForm.department_id,
           budget_id:     +expForm.budget_id,
           commitment_id: expForm.commitment_id ? +expForm.commitment_id : null,
           amount:        +expForm.amount,
         });
+        if (receipt && res.data?.expense_id) {
+          try { await expensesApi.uploadReceipt(res.data.expense_id, receipt); } catch {}
+        }
         onSuccess('Expense recorded successfully.');
       } else if (tab === 1) {
         await commitmentsApi.create({
@@ -150,6 +155,41 @@ export default function QuickEntryModal({ onClose, onSuccess }) {
                 onChange={e => setExpForm({ ...expForm, amount: e.target.value })}
               />
             </div>
+
+            {/* Receipt upload */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                marginBottom: 12, padding: '10px 14px', borderRadius: 6,
+                border: `1px dashed ${receipt ? 'var(--gold)' : 'var(--border2)'}`,
+                background: receipt ? 'rgba(201,151,10,0.06)' : 'var(--bg2)',
+                cursor: 'pointer', fontSize: 12, color: receipt ? 'var(--gold)' : 'var(--text3)',
+                display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              {receipt ? receipt.name : 'Attach receipt (PDF, JPG, PNG — optional)'}
+              {receipt && (
+                <span
+                  onClick={ev => { ev.stopPropagation(); setReceipt(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                  style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 14, lineHeight: 1 }}
+                >
+                  &#215;
+                </span>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              style={{ display: 'none' }}
+              onChange={e => setReceipt(e.target.files[0] || null)}
+            />
+
             <button onClick={handleSubmit} disabled={loading}>
               {loading ? 'Submitting...' : 'Submit Expense'}
             </button>

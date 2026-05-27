@@ -217,6 +217,28 @@ class Expense(Base):
     approved_at      = Column(TIMESTAMP, nullable=True)
     rejection_reason = Column(Text, nullable=True)
 
+    receipt_path     = Column(String(500), nullable=True)
+
+
+# =========================
+# 📝 BUDGET REVISION
+# =========================
+class BudgetRevision(Base):
+    __tablename__ = "budget_revisions"
+
+    revision_id      = Column(Integer, primary_key=True, index=True)
+    budget_id        = Column(Integer, ForeignKey("budgets.budget_id", ondelete="CASCADE"), nullable=False)
+    department_id    = Column(Integer, ForeignKey("departments.department_id", ondelete="CASCADE"), nullable=False)
+    requested_by     = Column(String(100), nullable=False)
+    current_amount   = Column(DECIMAL(14, 2), nullable=False)
+    requested_amount = Column(DECIMAL(14, 2), nullable=False)
+    reason           = Column(Text, nullable=False)
+    status           = Column(String(20), nullable=False, default="pending")
+    reviewed_by      = Column(String(100), nullable=True)
+    reviewed_at      = Column(TIMESTAMP, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at       = Column(TIMESTAMP, server_default=func.now())
+
 
 # =========================
 # 🚨 ALERT
@@ -275,3 +297,37 @@ class Alert(Base):
     resolved_at = Column(TIMESTAMP, nullable=True)
 
     created_at = Column(TIMESTAMP, server_default=func.now())
+
+
+# =========================
+# 📅 SCHEDULED REPORT CONFIG
+# =========================
+class ScheduledReport(Base):
+    __tablename__ = "scheduled_reports"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    enabled      = Column(Integer, nullable=False, default=0)
+    frequency    = Column(String(20), nullable=False, default="weekly")
+    day_of_week  = Column(Integer, nullable=True, default=0)
+    day_of_month = Column(Integer, nullable=True, default=1)
+    hour         = Column(Integer, nullable=False, default=8)
+    recipients   = Column(Text, nullable=True, default="[]")
+    last_sent_at = Column(TIMESTAMP, nullable=True)
+
+
+# =========================
+# 📋 AUDIT LOG
+# =========================
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    action      = Column(String(50),  nullable=False)
+    entity_type = Column(String(50),  nullable=False)
+    entity_ref  = Column(String(30),  nullable=True)
+    entity_id   = Column(Integer,     nullable=False)
+    actor       = Column(String(100), nullable=False)
+    detail      = Column(Text,        nullable=True)
+    amount      = Column(DECIMAL(14, 2), nullable=True)
+    dept_name   = Column(String(100), nullable=True)
+    created_at  = Column(TIMESTAMP,   server_default=func.now())
